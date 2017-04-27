@@ -1,8 +1,8 @@
 package main
 
 import (
-	//"os"
-	//"bufio"
+	"os"
+	"bufio"
 	//"time"
 	"sync"
 	//"os/signal"
@@ -64,11 +64,9 @@ func getData(p Params, obj RacherMetric) {
 	}
 }*/
 
-func getDataByFile(p Params, f string) {
+func getDataByLines(p Params, lines []string) {
 	var reqs Requests
-
-	reqs.getDataByFile(f, p.geoipdb)
-
+	reqs.getDataByLines(lines, p.geoipdb)
 	log.Info("Metrics ")
 	if p.format == "influx" {
 		reqs.sendToInflux(p)
@@ -76,6 +74,39 @@ func getDataByFile(p Params, f string) {
 	} else if p.format == "json" {
 		reqs.print(p.format)
 	}
+}
+
+func getDataByFile(p Params, f string) {
+
+	log.Info("Analyzing ", f)
+	file, err := os.Open(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// 64Kb buffer should be big enough
+	scanner := bufio.NewScanner(file)
+		//var wg sync.WaitGroup
+
+	var lines []string
+	i := 0
+	for scanner.Scan() {
+		line := scanner.Text()
+		if i < p.limit {
+			i++
+		} else {
+			getDataByLines(p, lines)
+			lines = lines[:0]
+			i = 1
+		}
+		lines = append(lines, line)
+	}
+
+	if i > 0 {
+		getDataByLines(p, lines)
+	}
+	
 }
 
 func getData(p Params, wg *sync.WaitGroup) {

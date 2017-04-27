@@ -213,7 +213,7 @@ func (r *Requests) sendToInflux(p Params) {
 			i.sendToInflux(r.Points[start:end])
 		}
 	} else {
-		log.Info("Sending to influx ", p_len, " points", p.limit)
+		log.Info("Sending to influx ", p_len, " points ")
 		i.sendToInflux(r.Points)
 	}
 }
