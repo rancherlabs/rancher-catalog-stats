@@ -49,7 +49,7 @@ NOTE: You need influx already installed and running. The influx db would be crea
 Metrics are on the form.....
 
 ```
-requests,city=Toronto,country=Canada,host=git.rancher.io,ip=205.210.184.16,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200 ip="205.210.184.16" 1491289498000000000
+requests,city=Toronto,country=Canada,host=git.rancher.io,ip=xx.xx.xx.xx,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200 ip="xx.xx.xx.xx" 1491289498000000000
 ```
 
 [alpine-base]: https://github.com/rawmind0/alpine-base
