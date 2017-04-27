@@ -44,4 +44,12 @@ Usage of rancher-catalog-stats:
 
 NOTE: You need influx already installed and running. The influx db would be created if doesn't exist.
 
+## Metrics
+
+Metrics are on the form.....
+
+```
+requests,city=Toronto,country=Canada,host=git.rancher.io,ip=205.210.184.16,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200 ip="205.210.184.16" 1491289498000000000
+```
+
 [alpine-base]: https://github.com/rawmind0/alpine-base
