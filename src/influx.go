@@ -27,7 +27,7 @@ func newInflux(u, d, us, pa string) *Influx {
 
 func (i *Influx) Connect() () {
     var err  error
-    message := "Connecting Influx connection..."
+    message := "Opening Influx connection..."
     i.cli, err = influx.NewHTTPClient(influx.HTTPConfig{
         Addr:     i.url,
         Username: i.user,
@@ -76,7 +76,7 @@ func (i *Influx) newBatch() {
 }
 
 func (i *Influx) newPoint(m influx.Point) {
-    message := "Adding point to Influx batch..."
+    message := "Adding point to batch..."
     fields, _ := m.Fields()
     pt, err := influx.NewPoint(m.Name(), m.Tags(), fields, m.Time())
     check(err, message)
@@ -84,23 +84,22 @@ func (i *Influx) newPoint(m influx.Point) {
 }
 
 func (i *Influx) newPoints(m []influx.Point) {
-    message := "Adding points to Influx batch..."
+    log.Info("Adding ",len(m)," points to batch...")
     for index := range m {
         i.newPoint(m[index])
     }
-    log.Info(message)
 }
 
 func (i *Influx) Write() {
     start := time.Now()
-    message := "Writing Influx points..."
+    message := "Writing batch points..."
 
     // Write the batch
     err := i.cli.Write(i.batch)
     check(err, message)
     log.Info(message)
 
-    log.Info("Time to write: ", float64((time.Since(start))/ time.Millisecond), "ms")
+    log.Info("Time to write ",len(i.batch.Points())," points: ", float64((time.Since(start))/ time.Millisecond), "ms")
 }
 
 func (i *Influx) sendToInflux(m []influx.Point){

@@ -13,15 +13,20 @@ docker build -t rawmind/rancher-catalog-stats:<version> .
 
 ## Versions
 
+- `0.0.2` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.2/Dockerfile)
 - `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
 
 
 ## Usage
 
-This image run rancher-catalog-stats service. Rancher-catalog-stats get metrics from rancher nginx logs files and send them to a influx in order to be explored by a grafana. It will get and send metrics every refresh seconds. 
+This image run rancher-catalog-stats service. Rancher-catalog-stats get metrics from rancher nginx logs files and send them to a influx in order to be explored by a grafana. 
+
+If you run in daemon mode it will tail files and send metrics every refresh seconds. 
 
 ```
 Usage of rancher-catalog-stats:
+  -daemon
+      Run in daemon mode. Tail files and send metrics continuously by limit or by refresh
   -filepath string
       Log files to analyze, wildcard allowed between quotes. (default "/var/log/nginx/access.log")
   -format string
@@ -38,8 +43,10 @@ Usage of rancher-catalog-stats:
       Influx username
   -limit int
       Limit batch size (default 2000)
+  -poll
+      Use poll instead of inotify. daemon mode
   -refresh int
-      Get metrics every refresh seconds (default 120)
+      Send metrics every refresh seconds. daemon mode (default 120)
 ```
 
 NOTE: You need influx already installed and running. The influx db would be created if doesn't exist.

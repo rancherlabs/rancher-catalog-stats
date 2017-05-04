@@ -7,11 +7,13 @@ import (
 	"time"
 	"encoding/json"
 	"os"
-	"bufio"
+	"os/signal"
+	"sync"
 	"net"
 	log "github.com/Sirupsen/logrus"
 	influx "github.com/influxdata/influxdb/client/v2"
 	"github.com/oschwald/maxminddb-golang"
+	"github.com/hpcloud/tail"
 )
 
 type reqLocation struct {
@@ -143,7 +145,7 @@ func NewRequest(str string, geoipdb string) (*Request, error) {
 	submatches := logline.FindStringSubmatch(str)
 
 	if len(submatches) != 12 || submatches[2] == "-" || submatches[2] == "localhost" {
-		log.Warn(str)
+		//log.Warn(str)
 		return nil, nil
 	}
 
@@ -169,101 +171,247 @@ func NewRequest(str string, geoipdb string) (*Request, error) {
 }
 
 type Requests struct {
-	Reqs 			[]Request `json:"data"`
-	Points 			[]influx.Point
+	Input 			chan *Request
+	Output 			chan *influx.Point
+	Exit 			chan os.Signal
+	Readers			[]chan struct{}
+	Config 			Params
 }
 
-func (r *Requests) getPoints() []influx.Point {
-	/*for _, req := range r.Reqs {
-	}*/
-
-	return r.Points
-}
-
-func (r *Requests) printJson() {
-	for _, req := range r.Reqs {
-		req.printJson()
+func newRequests(conf Params) *Requests {
+	var r = &Requests{
+		Readers: []chan struct{}{},
+		Config:	conf,
 	}
+
+	r.Input = make(chan *Request,1)
+	r.Output = make(chan *influx.Point,1)
+	r.Exit = make(chan os.Signal, 1)
+	signal.Notify(r.Exit, os.Interrupt, os.Kill)
+
+	customFormatter := new(log.TextFormatter)
+    customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+    log.SetFormatter(customFormatter)
+    customFormatter.FullTimestamp = true
+
+	return r
 }
 
-func (r *Requests) printInflux() {
-	for _, point := range r.Points {
-		fmt.Println(point.String())
-	}
+func (r *Requests) Close(){
+	close(r.Input)
+	close(r.Output)
+	close(r.Exit)
+
 }
 
-func (r *Requests) sendToInflux(p Params) {
-	var p_len, start, end int
+func (r *Requests) sendToInflux() {
+	var points []influx.Point
+	var index,p_len int
 	
-	i := newInflux(p.influxurl, p.influxdb, p.influxuser, p.influxpass)
+	i := newInflux(r.Config.influxurl, r.Config.influxdb, r.Config.influxuser, r.Config.influxpass)
 
 	i.Connect()
 	defer i.Close()
 
-	p_len = len(r.Points)
-	if p.limit < p_len {
-		log.Info("Sending to influx ", p_len, " points in batch size of ", p.limit)
-		for seq := 0; p_len > end ; seq++ {
-			start = (seq*p.limit)
-			end = (((seq+1)*p.limit)-1)
-			if p_len < end {
-				end = p_len
-			}
-			log.Info("Sending to influx from  ", start, " to ", end)
-			i.sendToInflux(r.Points[start:end])
+	ticker := time.NewTicker(time.Second * time.Duration(r.Config.refresh))
+
+	index = 0
+	for {
+        select {
+        case <-ticker.C:
+        	if len(points) > 0 {
+            	log.Info("Tick: Sending to influx ", len(points), " points")
+    			i.sendToInflux(points)
+    			/*for _ , _ = range points {
+    				//fmt.Println(p.String())
+    			}*/
+    			points = []influx.Point{}
+    		} else {
+    			log.Info("Tick: Nothing to send")
+    		}
+        case p := <- r.Output:
+        	if p != nil {
+        		points = append(points, *p)
+        		p_len = len(points)
+        		if p_len == r.Config.limit {
+            		log.Info("Batch: Sending to influx ", p_len, " points")
+            		i.sendToInflux(points)
+            		/*for _ , _ = range points {
+            			//fmt.Println(p.String())
+            		}*/
+            		points = []influx.Point{}
+            	}
+            	index++
+        	} else {
+        		p_len = len(points)
+        		if p_len > 0 {
+        			log.Info("Batch: Sending to influx ", p_len, " points")
+            		i.sendToInflux(points)
+            		/*
+            		for _ , _ = range points {
+            			//fmt.Println(p.String())
+            		}*/
+            		points = []influx.Point{}
+        		}
+        		return
+        	}
+        }
+    }
+}
+
+func (r *Requests) addReader() {
+	chan_new := make(chan struct{}, 1)
+	r.Readers = append(r.Readers, chan_new)
+}
+
+func (r *Requests) closeReaders() {
+	for _, r_chan := range r.Readers {
+		if r_chan != nil {
+			r_chan <- struct{}{}
+		}
+	}
+	r.Readers = nil
+}
+
+func (r *Requests) getDataByFile(f string, stop chan struct{}) {
+	var t_mode tail.Config
+	if r.Config.daemon {
+		if r.Config.poll {
+			t_mode = tail.Config{Follow: true, ReOpen: true, Poll: true}
+		} else {
+			t_mode = tail.Config{Follow: true, ReOpen: true, Poll: false}
 		}
 	} else {
-		log.Info("Sending to influx ", p_len, " points ")
-		i.sendToInflux(r.Points)
+		t_mode = tail.Config{Follow: false, ReOpen: false, Poll: false}
 	}
-}
 
-func (r *Requests) getDataByFiles(files []string, geoipdb string) {
-	for _, f := range files {
-		r.getDataByFile(f, geoipdb)
-	}
-}
-
-func (r *Requests) getDataByFile(f string, geoipdb string) {
 	log.Info("Analyzing ", f)
-	file, err := os.Open(f)
+	t, err := tail.TailFile(f, t_mode)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
 
-	// 64Kb buffer should be big enough
-	scanner := bufio.NewScanner(file)
-		//var wg sync.WaitGroup
+	defer close(stop)
+	defer log.Info("Closing ", f)
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		r.getData(string(line), geoipdb)
-	}
+	for {
+        select {
+        case line := <- t.Lines:
+        	if line != nil {
+            	r.getData(string(line.Text))
+        	} else {
+        		t.Stop()
+        		return
+        	}
+        case <- stop:
+        	t.Kill(nil)
+            return
+        }
+    }
 }
 
-func (r *Requests) getDataByLines(lines []string, geoipdb string) {
+func (r *Requests) getDataByFiles() {
+	var in, out sync.WaitGroup
+	done := make(chan struct{},1)
+
+	i_chan := 0
+	for _, f := range r.Config.files {
+		r.addReader()
+		in.Add(1)
+		go func(file string, num int) {
+			defer in.Done()
+			r.getDataByFile(file, r.Readers[num])
+		}(f, i_chan)
+
+		out.Add(1)
+		go func() {
+			defer out.Done()
+			r.getOutput()
+		}()
+		i_chan++
+	}
+
+	go func() {
+		in.Wait()
+		close(r.Input)
+		close(r.Output)
+		out.Wait()
+		close(done)
+	}()
+
+	for {
+        select {
+        case <- done:
+        	return
+        case <- r.Exit:
+        	//close(r.Exit)
+        	go r.closeReaders()
+        	log.Info("Exit signal detected....Closing...")
+        	select {
+        	case <- done:
+        		return
+        	}
+        }
+    }
+}
+
+func (r *Requests) getDataByLines(lines []string) {
 	for _, line := range lines {
-		r.getData(string(line), geoipdb)
+		r.getData(string(line))
 	}
 }
 
-func (r *Requests) getData(line string, geoipdb string) {
-	req, _ := NewRequest(line, geoipdb)
+func (r *Requests) getData(line string) {
+	req, _ := NewRequest(line, r.Config.geoipdb)
 	if req != nil {
-		r.Reqs = append(r.Reqs, *req)
-
-		p := req.getPoint()
-		r.Points = append(r.Points, *p)
+		if r.Config.format == "json" {
+			r.Input <- req
+		} else {
+			r.Output <- req.getPoint()
+		}
 	}
 }
 
-func (r *Requests) print(f string) {
-	if f == "json" {
+func (r *Requests) print() {
+	if r.Config.format == "json" {
 		r.printJson()
 	} else {
 		r.printInflux()
 	}
+}
+
+func (r *Requests) getOutput() {
+	if r.Config.format == "json" {
+		r.printJson()
+	} else {
+		r.sendToInflux()
+	}
+}
+
+func (r *Requests) printJson() {
+	for {
+        select {
+        case req := <- r.Input:
+        	if req != nil {
+            	req.printJson()
+        	} else {
+        		return
+        	}
+        }
+    }
+}
+
+func (r *Requests) printInflux() {
+	for {
+        select {
+        case p := <- r.Output:
+        	if p != nil {
+            	fmt.Println(p.String())
+        	} else {
+        		return
+        	}
+        }
+    }
 }
 
 
