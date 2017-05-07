@@ -13,6 +13,7 @@ type Influx struct {
     pass    string
     cli     influx.Client
     batch   influx.BatchPoints
+    timeout time.Duration
 }
 
 func newInflux(u, d, us, pa string) *Influx {
@@ -22,22 +23,83 @@ func newInflux(u, d, us, pa string) *Influx {
         user:   us,
         pass:   pa,
     }
+
+    a.timeout = time.Duration(10)
     return a
 }
 
-func (i *Influx) Connect() () {
+func (i *Influx) Check(retry int) bool {
+    resp_time, _ , err := i.cli.Ping(i.timeout)
+    if err != nil {
+        log.Error("[Error]: ", err)
+        log.Error("Influx disconnected...")
+        connected := false
+        for index := 0 ; index < retry && ! connected ; index++ {
+            log.Error("Reconnecting ",index+1," of ", retry,"...")
+            connected = i.Connect()
+            if ! connected {
+                time.Sleep(time.Duration(1) * time.Second)
+            }
+        }
+        if err != nil {
+            log.Error("Failed to connect to influx ", i.url)
+            return false
+        } else {
+            log.Info("Influx response time: ", resp_time)
+            return true
+        }
+    } else {
+        log.Info("Influx response time: ", resp_time)
+        return true
+    }
+}
+
+func (i *Influx) CheckConnect(interval int) (chan bool) {
+    ticker := time.NewTicker(time.Second * time.Duration(interval))
+
+    connected := make(chan bool)
+
+    go func(){
+        running := false
+        for {
+            select {
+            case <-ticker.C:
+                if ! running {
+                    running = true
+                    if ! i.Check(2) { 
+                        close(connected)
+                        return 
+                    } 
+                    running = false
+                }  
+            } 
+        }
+    }()
+
+    return connected
+}
+
+func (i *Influx) Connect() bool {
     var err  error
-    message := "Opening Influx connection..."
+    log.Info("Connecting to Influx...")
+
     i.cli, err = influx.NewHTTPClient(influx.HTTPConfig{
         Addr:     i.url,
         Username: i.user,
         Password: i.pass,
     })
-    check(err, message)
 
-    log.Info(message)
+    if err != nil {
+        log.Error("[Error]: ", err)
+        return false
+    } 
 
-    i.createDb()
+    if i.Check(0) {
+        i.createDb()
+        return true
+    } else {
+        return false
+    }
 }
 
 func (i *Influx) Init() () {
@@ -53,14 +115,17 @@ func (i *Influx) Close() {
 
 func (i *Influx) createDb() {
     var err  error
-    message := "Creating Influx database if not exists..."
+    log.Info("Creating Influx database if not exists...")
 
     comm := "CREATE DATABASE "+i.db
 
     q := influx.NewQuery(comm, "", "")
     _, err = i.cli.Query(q)
-    check(err, message)
-    log.Info(message)
+    if err != nil {
+        log.Error("[Error] ", err)
+    } else {
+        log.Info("Influx database ", i.db," created.")
+    } 
 }
 
 func (i *Influx) newBatch() {
@@ -92,23 +157,27 @@ func (i *Influx) newPoints(m []influx.Point) {
 
 func (i *Influx) Write() {
     start := time.Now()
-    message := "Writing batch points..."
+    log.Info("Writing batch points...")
 
     // Write the batch
     err := i.cli.Write(i.batch)
-    check(err, message)
-    log.Info(message)
+    if err != nil {
+        log.Error("[Error]: ", err)
+
+    }
 
     log.Info("Time to write ",len(i.batch.Points())," points: ", float64((time.Since(start))/ time.Millisecond), "ms")
 }
 
-func (i *Influx) sendToInflux(m []influx.Point){
-    i.Init()
-
-    i.newPoints(m)
-
-    i.Write()
-
+func (i *Influx) sendToInflux(m []influx.Point, retry int) bool {
+    if i.Check(retry) {
+        i.Init()
+        i.newPoints(m)
+        i.Write()
+        return true
+    } else {
+        return false
+    }
 }
 
 

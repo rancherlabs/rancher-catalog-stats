@@ -8,7 +8,7 @@
   "hideControls": false,
   "id": 2,
   "links": [],
-  "refresh": false,
+  "refresh": "5m",
   "rows": [
     {
       "collapse": false,
@@ -403,7 +403,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Total requests by country",
+          "title": "Total requests by ip",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -453,8 +453,8 @@
     "list": [
       {
         "current": {
-          "text": "catalog",
-          "value": "catalog"
+          "text": "catalogdb",
+          "value": "catalogdb"
         },
         "hide": 0,
         "label": null,
@@ -468,8 +468,8 @@
     ]
   },
   "time": {
-    "from": "2017-04-04T19:55:33.053Z",
-    "to": "2017-04-07T19:55:33.053Z"
+    "from": "now/d",
+    "to": "now/d"
   },
   "timepicker": {
     "refresh_intervals": [
@@ -498,5 +498,5 @@
   },
   "timezone": "browser",
   "title": "catalog",
-  "version": 21
+  "version": 7
 }

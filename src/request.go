@@ -210,53 +210,54 @@ func (r *Requests) sendToInflux() {
 	
 	i := newInflux(r.Config.influxurl, r.Config.influxdb, r.Config.influxuser, r.Config.influxpass)
 
-	i.Connect()
-	defer i.Close()
+	if i.Connect() {
+		connected := i.CheckConnect(r.Config.refresh)
+		defer i.Close()
 
-	ticker := time.NewTicker(time.Second * time.Duration(r.Config.refresh))
+		ticker := time.NewTicker(time.Second * time.Duration(r.Config.refresh))
 
-	index = 0
-	for {
-        select {
-        case <-ticker.C:
-        	if len(points) > 0 {
-            	log.Info("Tick: Sending to influx ", len(points), " points")
-    			i.sendToInflux(points)
-    			/*for _ , _ = range points {
-    				//fmt.Println(p.String())
-    			}*/
-    			points = []influx.Point{}
-    		} else {
-    			log.Info("Tick: Nothing to send")
-    		}
-        case p := <- r.Output:
-        	if p != nil {
-        		points = append(points, *p)
-        		p_len = len(points)
-        		if p_len == r.Config.limit {
-            		log.Info("Batch: Sending to influx ", p_len, " points")
-            		i.sendToInflux(points)
-            		/*for _ , _ = range points {
-            			//fmt.Println(p.String())
-            		}*/
-            		points = []influx.Point{}
-            	}
-            	index++
-        	} else {
-        		p_len = len(points)
-        		if p_len > 0 {
-        			log.Info("Batch: Sending to influx ", p_len, " points")
-            		i.sendToInflux(points)
-            		/*
-            		for _ , _ = range points {
-            			//fmt.Println(p.String())
-            		}*/
-            		points = []influx.Point{}
-        		}
-        		return
-        	}
-        }
-    }
+		index = 0
+		for {
+	        select {
+	        case <-connected:
+	        	return
+	        case <-ticker.C:
+	        	if len(points) > 0 {
+	            	log.Info("Tick: Sending to influx ", len(points), " points")
+	    			if i.sendToInflux(points,1) {
+	    				points = []influx.Point{}
+	    			} else {
+	    				return
+	    			}
+	    		} else {
+	    			log.Info("Tick: Nothing to send")
+	    		}
+	        case p := <- r.Output:
+	        	if p != nil {
+	        		points = append(points, *p)
+	        		p_len = len(points)
+	        		if p_len == r.Config.limit {
+	            		log.Info("Batch: Sending to influx ", p_len, " points")
+	            		if i.sendToInflux(points,1) {
+	    					points = []influx.Point{}
+	    				} else {
+	    					return
+	    				}
+	            	}
+	            	index++
+	        	} else {
+	        		p_len = len(points)
+	        		if p_len > 0 {
+	        			log.Info("Batch: Sending to influx ", p_len, " points")
+	            		if i.sendToInflux(points,1) {
+	    					points = []influx.Point{}
+	    				}
+	        		}
+	        		return
+	        	}
+	        }
+	    }
+	} 
 }
 
 func (r *Requests) addReader() {
@@ -312,7 +313,8 @@ func (r *Requests) getDataByFile(f string, stop chan struct{}) {
 
 func (r *Requests) getDataByFiles() {
 	var in, out sync.WaitGroup
-	done := make(chan struct{},1)
+	indone := make(chan struct{},1)
+	outdone := make(chan struct{},1)
 
 	i_chan := 0
 	for _, f := range r.Config.files {
@@ -335,20 +337,29 @@ func (r *Requests) getDataByFiles() {
 		in.Wait()
 		close(r.Input)
 		close(r.Output)
+		close(indone)
+	}()
+
+	go func() {
 		out.Wait()
-		close(done)
+		close(outdone)
 	}()
 
 	for {
         select {
-        case <- done:
+        case <- indone:
+        	<- outdone
+        	return
+        case <- outdone:
+        	log.Error("Aborting...")
+        	go r.closeReaders()
         	return
         case <- r.Exit:
         	//close(r.Exit)
-        	go r.closeReaders()
         	log.Info("Exit signal detected....Closing...")
+        	go r.closeReaders()
         	select {
-        	case <- done:
+        	case <- outdone:
         		return
         	}
         }
