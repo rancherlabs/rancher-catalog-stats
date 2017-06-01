@@ -6,13 +6,13 @@
   "gnetId": null,
   "graphTooltip": 0,
   "hideControls": false,
-  "id": 2,
+  "id": 1,
   "links": [],
-  "refresh": "5m",
+  "refresh": false,
   "rows": [
     {
       "collapse": false,
-      "height": 250,
+      "height": 115,
       "panels": [
         {
           "cacheTimeout": null,
@@ -33,7 +33,7 @@
             "thresholdMarkers": true
           },
           "id": 2,
-          "interval": null,
+          "interval": ">1h",
           "links": [],
           "mappingType": 1,
           "mappingTypes": [
@@ -65,15 +65,25 @@
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
             "lineColor": "rgb(31, 120, 193)",
-            "show": false
+            "show": true
           },
+          "tableColumn": "",
           "targets": [
             {
               "dsType": "influxdb",
-              "groupBy": [],
-              "measurement": "requests",
+              "groupBy": [
+                {
+                  "params": [
+                    "$interval"
+                  ],
+                  "type": "time"
+                }
+              ],
+              "hide": false,
+              "measurement": "requests_1h",
+              "orderByTime": "ASC",
               "policy": "default",
-              "query": "SELECT count(distinct(\"ip\")) FROM \"requests\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter",
+              "query": "SELECT sum(\"unique\") FROM \"requests_1h\" WHERE \"path\" = '/community-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY time($interval)",
               "rawQuery": true,
               "refId": "A",
               "resultFormat": "time_series",
@@ -81,13 +91,13 @@
                 [
                   {
                     "params": [
-                      "ip"
+                      "unique"
                     ],
                     "type": "field"
                   },
                   {
                     "params": [],
-                    "type": "count"
+                    "type": "sum"
                   }
                 ]
               ],
@@ -95,7 +105,7 @@
                 {
                   "key": "path",
                   "operator": "=",
-                  "value": "/rancher-catalog.git/info/refs?service=git-upload-pack"
+                  "value": "/community-catalog.git/info/refs?service=git-upload-pack"
                 }
               ]
             }
@@ -165,15 +175,17 @@
             "fillColor": "rgba(31, 118, 189, 0.18)",
             "full": false,
             "lineColor": "rgb(31, 120, 193)",
-            "show": false
+            "show": true
           },
+          "tableColumn": "",
           "targets": [
             {
               "dsType": "influxdb",
               "groupBy": [],
               "measurement": "requests",
+              "orderByTime": "ASC",
               "policy": "default",
-              "query": "SELECT count(\"ip\") FROM \"requests\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter",
+              "query": "SELECT sum(\"total\") FROM \"requests_1h\" WHERE \"path\" = '/community-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY time($interval)",
               "rawQuery": true,
               "refId": "A",
               "resultFormat": "time_series",
@@ -223,14 +235,16 @@
     },
     {
       "collapse": false,
-      "height": 451,
+      "height": 305,
       "panels": [
         {
           "aliasColors": {},
-          "bars": true,
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
           "datasource": "$influxcatalog",
           "fill": 1,
-          "id": 1,
+          "id": 6,
           "legend": {
             "avg": false,
             "current": false,
@@ -240,53 +254,67 @@
             "total": false,
             "values": false
           },
-          "lines": false,
+          "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "null",
+          "nullPointMode": "connected",
           "percentage": false,
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
           "seriesOverrides": [],
-          "span": 12,
-          "stack": true,
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
           "steppedLine": false,
           "targets": [
             {
-              "alias": "$tag_country",
+              "alias": "$tag_path",
               "dsType": "influxdb",
               "groupBy": [
                 {
                   "params": [
-                    "country"
+                    "$interval"
+                  ],
+                  "type": "time"
+                },
+                {
+                  "params": [
+                    "path"
                   ],
                   "type": "tag"
                 }
               ],
               "hide": false,
-              "measurement": "requests",
+              "measurement": "requests_1h",
+              "orderByTime": "ASC",
               "policy": "default",
-              "query": "SELECT count(distinct(\"ip\")) FROM \"requests\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY \"country\"",
-              "rawQuery": true,
+              "query": "SELECT count(\"ip\") FROM \"requests\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY \"country\"",
+              "rawQuery": false,
               "refId": "B",
               "resultFormat": "time_series",
               "select": [
                 [
                   {
                     "params": [
-                      "ip"
+                      "unique"
                     ],
                     "type": "field"
                   },
                   {
                     "params": [],
-                    "type": "count"
+                    "type": "sum"
                   }
                 ]
               ],
               "tags": [
                 {
+                  "key": "path",
+                  "operator": "=",
+                  "value": "/community-catalog.git/info/refs?service=git-upload-pack"
+                },
+                {
+                  "condition": "OR",
                   "key": "path",
                   "operator": "=",
                   "value": "/rancher-catalog.git/info/refs?service=git-upload-pack"
@@ -297,7 +325,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Unique ip requests by country",
+          "title": "Unique requests by path",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -305,9 +333,10 @@
           },
           "type": "graph",
           "xaxis": {
-            "mode": "series",
+            "buckets": null,
+            "mode": "time",
             "name": null,
-            "show": false,
+            "show": true,
             "values": [
               "total"
             ]
@@ -333,7 +362,9 @@
         },
         {
           "aliasColors": {},
-          "bars": true,
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
           "datasource": "$influxcatalog",
           "fill": 1,
           "id": 5,
@@ -346,16 +377,140 @@
             "total": false,
             "values": false
           },
-          "lines": false,
+          "lines": true,
           "linewidth": 1,
           "links": [],
-          "nullPointMode": "null",
+          "nullPointMode": "connected",
           "percentage": false,
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
           "seriesOverrides": [],
-          "span": 12,
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "alias": "$tag_path",
+              "dsType": "influxdb",
+              "groupBy": [
+                {
+                  "params": [
+                    "$interval"
+                  ],
+                  "type": "time"
+                },
+                {
+                  "params": [
+                    "path"
+                  ],
+                  "type": "tag"
+                }
+              ],
+              "hide": false,
+              "measurement": "requests_1h",
+              "orderByTime": "ASC",
+              "policy": "default",
+              "query": "SELECT count(\"ip\") FROM \"requests\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY \"country\"",
+              "rawQuery": false,
+              "refId": "B",
+              "resultFormat": "time_series",
+              "select": [
+                [
+                  {
+                    "params": [
+                      "total"
+                    ],
+                    "type": "field"
+                  },
+                  {
+                    "params": [],
+                    "type": "sum"
+                  }
+                ]
+              ],
+              "tags": [
+                {
+                  "key": "path",
+                  "operator": "=",
+                  "value": "/community-catalog.git/info/refs?service=git-upload-pack"
+                },
+                {
+                  "condition": "OR",
+                  "key": "path",
+                  "operator": "=",
+                  "value": "/rancher-catalog.git/info/refs?service=git-upload-pack"
+                }
+              ]
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Total requests by path",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": [
+              "total"
+            ]
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "$influxcatalog",
+          "fill": 1,
+          "id": 1,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": false,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "connected",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
           "stack": false,
           "steppedLine": false,
           "targets": [
@@ -365,29 +520,36 @@
               "groupBy": [
                 {
                   "params": [
+                    "$interval"
+                  ],
+                  "type": "time"
+                },
+                {
+                  "params": [
                     "country"
                   ],
                   "type": "tag"
                 }
               ],
               "hide": false,
-              "measurement": "requests",
+              "measurement": "requests_1h",
+              "orderByTime": "ASC",
               "policy": "default",
-              "query": "SELECT count(\"ip\") FROM \"requests\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY \"country\"",
-              "rawQuery": true,
+              "query": "SELECT sum(\"unique\") FROM \"requests_1h\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY time($interval), \"country\"",
+              "rawQuery": false,
               "refId": "B",
               "resultFormat": "time_series",
               "select": [
                 [
                   {
                     "params": [
-                      "ip"
+                      "unique"
                     ],
                     "type": "field"
                   },
                   {
                     "params": [],
-                    "type": "count"
+                    "type": "sum"
                   }
                 ]
               ],
@@ -403,7 +565,7 @@
           "thresholds": [],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Total requests by ip",
+          "title": "Unique requests by country",
           "tooltip": {
             "shared": true,
             "sort": 2,
@@ -411,12 +573,126 @@
           },
           "type": "graph",
           "xaxis": {
-            "mode": "series",
+            "buckets": null,
+            "mode": "time",
             "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ]
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "$influxcatalog",
+          "fill": 1,
+          "id": 7,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
             "show": false,
-            "values": [
-              "total"
-            ]
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "connected",
+          "percentage": false,
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "span": 6,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "alias": "$tag_country",
+              "dsType": "influxdb",
+              "groupBy": [
+                {
+                  "params": [
+                    "$interval"
+                  ],
+                  "type": "time"
+                },
+                {
+                  "params": [
+                    "country"
+                  ],
+                  "type": "tag"
+                }
+              ],
+              "hide": false,
+              "measurement": "requests_1h",
+              "orderByTime": "ASC",
+              "policy": "default",
+              "query": "SELECT sum(\"unique\") FROM \"requests_1h\" WHERE \"path\" = '/rancher-catalog.git/info/refs?service=git-upload-pack' AND $timeFilter GROUP BY time($interval), \"country\"",
+              "rawQuery": false,
+              "refId": "B",
+              "resultFormat": "time_series",
+              "select": [
+                [
+                  {
+                    "params": [
+                      "total"
+                    ],
+                    "type": "field"
+                  },
+                  {
+                    "params": [],
+                    "type": "sum"
+                  }
+                ]
+              ],
+              "tags": [
+                {
+                  "key": "path",
+                  "operator": "=",
+                  "value": "/rancher-catalog.git/info/refs?service=git-upload-pack"
+                }
+              ]
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Total requests by country",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
           },
           "yaxes": [
             {
@@ -453,8 +729,8 @@
     "list": [
       {
         "current": {
-          "text": "catalogdb",
-          "value": "catalogdb"
+          "text": "catalog",
+          "value": "catalog"
         },
         "hide": 0,
         "label": null,
@@ -468,8 +744,8 @@
     ]
   },
   "time": {
-    "from": "now/d",
-    "to": "now/d"
+    "from": "now-24h",
+    "to": "now"
   },
   "timepicker": {
     "refresh_intervals": [
@@ -498,5 +774,5 @@
   },
   "timezone": "browser",
   "title": "catalog",
-  "version": 7
+  "version": 6
 }

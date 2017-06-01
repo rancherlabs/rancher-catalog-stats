@@ -7,6 +7,7 @@ import (
 	"time"
 	"encoding/json"
 	"os"
+	"errors"
 	"os/signal"
 	"sync"
 	"net"
@@ -18,7 +19,10 @@ import (
 
 type reqLocation struct {
 	City          	string `json:"city"`
-	Country        	string `json:"country"`
+	Country        	struct {
+    	Name 		string 
+       	ISOCode 	string 
+    } `json:"country"`
 } 
 
 type Request struct {
@@ -77,7 +81,8 @@ func (r *Request) getPoint() *influx.Point {
         "path": r.Path,
         "status": r.Status,
         "city": r.Location.City,
-        "country": r.Location.Country,
+        "country": r.Location.Country.Name,
+        "country_isocode": r.Location.Country.ISOCode,
     }
 
 	m, err := influx.NewPoint(n,t,v,r.Timestamp)
@@ -127,8 +132,49 @@ func (r *Request) getLocation(geoipdb string) {
     }
     
     r.Location.City = record.City.Names["en"] 
-    r.Location.Country = record.Country.Names["en"]
+    r.Location.Country.Name = record.Country.Names["en"]
+    r.Location.Country.ISOCode = record.Country.ISOCode
 }
+
+// Get data from the input string
+func (r *Request) getData(str string, geoipdb string) (error) {
+	var cli_ip string
+
+	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for '
+	//                        '"$request" $status $body_bytes_sent "$http_referer" '
+	//                        '"$http_user_agent" $request_time $upstream_response_time';
+	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+)")
+	if err != nil {
+		log.Fatal(err)
+		return err
+	}
+
+	submatches := logline.FindStringSubmatch(str)
+
+	if len(submatches) != 12 || submatches[2] == "-" || submatches[2] == "localhost" {
+		//log.Warn(str)
+		return errors.New("Bad format.")
+	}
+
+	if len(submatches[4]) < 7 {
+		cli_ip = submatches[3]
+	} else {
+		cli_ip = submatches[4]
+	}
+
+	r.Ip = cli_ip
+	r.Host = submatches[2]
+	r.Status =  submatches[6]
+	r.Referer = submatches[8]
+	r.Agent = submatches[9]
+
+	r.parseTimestamp(submatches[1])
+	r.parseRequest(submatches[5])
+	r.getLocation(geoipdb)
+
+	return nil
+}
+
 
 // Initialize a new request from the input string
 func NewRequest(str string, geoipdb string) (*Request, error) {
@@ -373,8 +419,9 @@ func (r *Requests) getDataByLines(lines []string) {
 }
 
 func (r *Requests) getData(line string) {
-	req, _ := NewRequest(line, r.Config.geoipdb)
-	if req != nil {
+	req := &Request{}
+	err := req.getData(line, r.Config.geoipdb)
+	if err == nil {
 		if r.Config.format == "json" {
 			r.Input <- req
 		} else {
