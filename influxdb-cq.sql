@@ -9,6 +9,16 @@ CREATE CONTINUOUS QUERY "requests_12h" ON "catalog" BEGIN SELECT last("total") A
 
 CREATE CONTINUOUS QUERY "requests_24h" ON "catalog" BEGIN SELECT last("total") AS "total", last("unique") AS "unique" INTO "requests_24h" FROM "requests_12h" GROUP BY time(24h),country,path,city,ip END
 
+# byUid agg 1h, 4h, 12h 24h
+CREATE CONTINUOUS QUERY "byUid_1h" ON "catalog" BEGIN SELECT count(distinct("ip")) AS "unique", count("ip") AS "total" INTO "requests_1h" FROM "requests" GROUP BY time(1h),uid,path END
+
+CREATE CONTINUOUS QUERY "byUid_4h" ON "catalog" BEGIN SELECT last("total") AS "total", last("unique") AS "unique" INTO "requests_4h" FROM "requests_1h" GROUP BY time(4h),country,path,city,ip END
+
+CREATE CONTINUOUS QUERY "byUid_12h" ON "catalog" BEGIN SELECT last("total") AS "total", last("unique") AS "unique" INTO "requests_12h" FROM "requests_4h" GROUP BY time(12h),country,path,city,ip END
+
+CREATE CONTINUOUS QUERY "byUid_24h" ON "catalog" BEGIN SELECT last("total") AS "total", last("unique") AS "unique" INTO "requests_24h" FROM "requests_12h" GROUP BY time(24h),country,path,city,ip END
+
+
 # byCountry agg 1h, 4h, 12h 24h
 CREATE CONTINUOUS QUERY "byCountry_1h" ON "catalog" BEGIN SELECT count(distinct("ip")) AS "unique", count("ip") AS "total" INTO "byCountry_1h" FROM "requests" GROUP BY time(1h),country,country_isocode,path,city END
 

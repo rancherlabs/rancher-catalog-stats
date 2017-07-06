@@ -396,7 +396,6 @@ func (r *Requests) getData(line string) {
 	err := req.getData(line, r.Config.geoipdb)
 	if err != nil {
 		//log.Info("Error getting data, ", err)
-		continue
 	} else {
 		if r.Config.format == "json" {
 			r.Input <- req

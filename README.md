@@ -13,7 +13,7 @@ docker build -t rawmind/rancher-catalog-stats:<version> .
 
 ## Versions
 
-- `0.2-5` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-5/Dockerfile)
+- `0.2-6` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-6/Dockerfile)
 - `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
 
 
