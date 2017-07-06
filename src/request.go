@@ -417,8 +417,8 @@ func (r *Requests) getOutput() {
 	if r.Config.format == "json" {
 		r.printJson()
 	} else {
-		//r.sendToInflux()
-		r.printInflux()
+		r.sendToInflux()
+		//r.printInflux()
 	}
 }
 
