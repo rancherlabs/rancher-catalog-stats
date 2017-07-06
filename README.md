@@ -13,7 +13,7 @@ docker build -t rawmind/rancher-catalog-stats:<version> .
 
 ## Versions
 
-- `0.2-4` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-4/Dockerfile)
+- `0.2-5` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-5/Dockerfile)
 - `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
 
 
@@ -60,3 +60,6 @@ requests,city=Toronto,country=Canada,host=git.rancher.io,ip=xx.xx.xx.xx,method=G
 ```
 
 [alpine-base]: https://github.com/rawmind0/alpine-base
+
+
+
