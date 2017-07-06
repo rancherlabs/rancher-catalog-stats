@@ -34,6 +34,7 @@ type Request struct {
 	Status    string    `json:"status"` // Responses status code (200, 400, etc)
 	Referer   string    `json:"referer"` // Referer (usually is set to "-")
 	Agent     string    `json:"agent"` // User agent string
+	Uid       string    `json:"uid"` // User agent string
 	Location  reqLocation `json:"location"` // Remote IP location
 	Timestamp time.Time `json:"timestamp"` // Request timestamp (UTC)
 }
@@ -73,10 +74,12 @@ func (r *Request) getPoint() *influx.Point {
 	var n = "requests"
     v := map[string]interface{}{
         "ip": r.Ip,
+        "uid": r.Uid,
     }
     t := map[string]string{
     	"host":  r.Host,
         "ip": r.Ip,
+        "uid": r.Uid,
         "method": r.Method,
         "path": r.Path,
         "status": r.Status,
@@ -142,8 +145,9 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for '
 	//                        '"$request" $status $body_bytes_sent "$http_referer" '
-	//                        '"$http_user_agent" $request_time $upstream_response_time';
-	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+)")
+	//                        '"$http_user_agent" $request_time $upstream_response_time "$http_x_install_uuid"';
+	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\"")
+
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -151,7 +155,7 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 	submatches := logline.FindStringSubmatch(str)
 
-	if len(submatches) != 12 || submatches[2] == "-" || submatches[2] == "localhost" {
+	if len(submatches) != 13  || submatches[2] == "-" || submatches[2] == "localhost" {
 		//log.Warn(str)
 		return errors.New("Bad format.")
 	}
@@ -167,6 +171,7 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 	r.Status =  submatches[6]
 	r.Referer = submatches[8]
 	r.Agent = submatches[9]
+	r.Uid = submatches[12]
 
 	r.parseTimestamp(submatches[1])
 	r.parseRequest(submatches[5])
@@ -178,41 +183,9 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 // Initialize a new request from the input string
 func NewRequest(str string, geoipdb string) (*Request, error) {
-	var cli_ip string
+	req := &Request{}
 
-	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for '
-	//                        '"$request" $status $body_bytes_sent "$http_referer" '
-	//                        '"$http_user_agent" $request_time $upstream_response_time';
-	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+)")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	submatches := logline.FindStringSubmatch(str)
-
-	if len(submatches) != 12 || submatches[2] == "-" || submatches[2] == "localhost" {
-		//log.Warn(str)
-		return nil, nil
-	}
-
-	if len(submatches[4]) < 7 {
-		cli_ip = submatches[3]
-	} else {
-		cli_ip = submatches[4]
-	}
-
-	req := &Request{
-		Ip:      cli_ip,
-		Host:    submatches[2],
-		Status:  submatches[6],
-		Referer: submatches[8],
-		Agent:   submatches[9],
-	}
-
-	req.parseTimestamp(submatches[1])
-	req.parseRequest(submatches[5])
-	req.getLocation(geoipdb)
-
+	req.getData(str, geoipdb)
 	return req, nil
 }
 
@@ -421,7 +394,9 @@ func (r *Requests) getDataByLines(lines []string) {
 func (r *Requests) getData(line string) {
 	req := &Request{}
 	err := req.getData(line, r.Config.geoipdb)
-	if err == nil {
+	if err != nil {
+		log.Info("Error getting data, ", err)
+	} else {
 		if r.Config.format == "json" {
 			r.Input <- req
 		} else {
@@ -442,7 +417,8 @@ func (r *Requests) getOutput() {
 	if r.Config.format == "json" {
 		r.printJson()
 	} else {
-		r.sendToInflux()
+		//r.sendToInflux()
+		r.printInflux()
 	}
 }
 

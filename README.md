@@ -13,7 +13,7 @@ docker build -t rawmind/rancher-catalog-stats:<version> .
 
 ## Versions
 
-- `0.2-2` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-2/Dockerfile)
+- `0.2-3` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-3/Dockerfile)
 - `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
 
 
@@ -56,7 +56,7 @@ NOTE: You need influx already installed and running. The influx db would be crea
 Metrics are on the form.....
 
 ```
-requests,city=Toronto,country=Canada,host=git.rancher.io,ip=xx.xx.xx.xx,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200 ip="xx.xx.xx.xx" 1491289498000000000
+requests,city=Toronto,country=Canada,host=git.rancher.io,ip=xx.xx.xx.xx,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200,uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" ip="xx.xx.xx.xx",uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" 1491289498000000000
 ```
 
 [alpine-base]: https://github.com/rawmind0/alpine-base

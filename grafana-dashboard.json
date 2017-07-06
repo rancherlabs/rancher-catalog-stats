@@ -12,6 +12,98 @@
   "rows": [
     {
       "collapse": false,
+      "height": 615,
+      "panels": [
+        {
+          "circleMaxSize": 30,
+          "circleMinSize": 2,
+          "colors": [
+            "rgba(245, 54, 54, 0.9)",
+            "rgba(237, 129, 40, 0.89)",
+            "rgba(50, 172, 45, 0.97)"
+          ],
+          "datasource": "$influxcatalog",
+          "decimals": 0,
+          "esMetric": "Count",
+          "hideEmpty": false,
+          "hideZero": false,
+          "id": 8,
+          "initialZoom": 1,
+          "links": [],
+          "locationData": "countries",
+          "mapCenter": "(0°, 0°)",
+          "mapCenterLatitude": 0,
+          "mapCenterLongitude": 0,
+          "maxDataPoints": 1,
+          "showLegend": true,
+          "span": 12,
+          "stickyLabels": true,
+          "targets": [
+            {
+              "alias": "$tag_country_isocode",
+              "dsType": "influxdb",
+              "groupBy": [
+                {
+                  "params": [
+                    "$__interval"
+                  ],
+                  "type": "time"
+                },
+                {
+                  "params": [
+                    "country_isocode"
+                  ],
+                  "type": "tag"
+                }
+              ],
+              "hide": false,
+              "measurement": "byCountry_1h",
+              "orderByTime": "ASC",
+              "policy": "default",
+              "query": "SELECT sum(\"unique\") FROM \"byCountry_1h\" WHERE $timeFilter GROUP BY time($__interval), \"country_isocode\"",
+              "rawQuery": false,
+              "refId": "A",
+              "resultFormat": "time_series",
+              "select": [
+                [
+                  {
+                    "params": [
+                      "unique"
+                    ],
+                    "type": "field"
+                  },
+                  {
+                    "params": [],
+                    "type": "sum"
+                  }
+                ]
+              ],
+              "tags": [
+                {
+                  "key": "path",
+                  "operator": "=",
+                  "value": "/rancher-catalog.git/info/refs?service=git-upload-pack"
+                }
+              ]
+            }
+          ],
+          "thresholds": "500,1000",
+          "title": "Daily rancher unique requests",
+          "type": "grafana-worldmap-panel",
+          "unitPlural": "",
+          "unitSingle": "",
+          "valueName": "total"
+        }
+      ],
+      "repeat": null,
+      "repeatIteration": null,
+      "repeatRowId": null,
+      "showTitle": true,
+      "title": "World map",
+      "titleSize": "h6"
+    },
+    {
+      "collapse": false,
       "height": 115,
       "panels": [
         {
@@ -774,5 +866,5 @@
   },
   "timezone": "browser",
   "title": "catalog",
-  "version": 6
+  "version": 9
 }
