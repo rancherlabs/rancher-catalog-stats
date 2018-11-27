@@ -1,42 +1,42 @@
 package main
 
 import (
-	"fmt"
-	"regexp"
-	"strings"
-	"time"
 	"encoding/json"
-	"os"
 	"errors"
-	"os/signal"
-	"sync"
-	"net"
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/hpcloud/tail"
 	influx "github.com/influxdata/influxdb/client/v2"
 	"github.com/oschwald/maxminddb-golang"
-	"github.com/hpcloud/tail"
+	"net"
+	"os"
+	"os/signal"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
 )
 
 type reqLocation struct {
-	City          	string `json:"city"`
-	Country        	struct {
-    	Name 		string 
-       	ISOCode 	string 
-    } `json:"country"`
-} 
+	City    string `json:"city"`
+	Country struct {
+		Name    string
+		ISOCode string
+	} `json:"country"`
+}
 
 type Request struct {
-	Ip        string    `json:"ip"` // Remote IP address of the client
-	Proto     string    `json:"proto"` // HTTP protocol
-	Method    string    `json:"method"` // Request method (GET, POST, etc)
-	Host      string    `json:"host"` // Requested hostname
-	Path      string    `json:"path"` // Requested path
-	Status    string    `json:"status"` // Responses status code (200, 400, etc)
-	Referer   string    `json:"referer"` // Referer (usually is set to "-")
-	Agent     string    `json:"agent"` // User agent string
-	Uid       string    `json:"uid"` // User agent string
-	Location  reqLocation `json:"location"` // Remote IP location
-	Timestamp time.Time `json:"timestamp"` // Request timestamp (UTC)
+	Ip        string      `json:"ip"`        // Remote IP address of the client
+	Proto     string      `json:"proto"`     // HTTP protocol
+	Method    string      `json:"method"`    // Request method (GET, POST, etc)
+	Host      string      `json:"host"`      // Requested hostname
+	Path      string      `json:"path"`      // Requested path
+	Status    string      `json:"status"`    // Responses status code (200, 400, etc)
+	Referer   string      `json:"referer"`   // Referer (usually is set to "-")
+	Agent     string      `json:"agent"`     // User agent string
+	Uid       string      `json:"uid"`       // User agent string
+	Location  reqLocation `json:"location"`  // Remote IP location
+	Timestamp time.Time   `json:"timestamp"` // Request timestamp (UTC)
 }
 
 // Parse nginx request data
@@ -72,29 +72,29 @@ func (r *Request) printInflux() {
 
 func (r *Request) getPoint() *influx.Point {
 	var n = "requests"
-    v := map[string]interface{}{
-        "ip": r.Ip,
-        "uid": r.Uid,
-    }
-    t := map[string]string{
-    	"host":  r.Host,
-        "ip": r.Ip,
-        "uid": r.Uid,
-        "method": r.Method,
-        "path": r.Path,
-        "status": r.Status,
-        "city": r.Location.City,
-        "country": r.Location.Country.Name,
-        "country_isocode": r.Location.Country.ISOCode,
-    }
+	v := map[string]interface{}{
+		"ip":  r.Ip,
+		"uid": r.Uid,
+	}
+	t := map[string]string{
+		"host":            r.Host,
+		"ip":              r.Ip,
+		"uid":             r.Uid,
+		"method":          r.Method,
+		"path":            r.Path,
+		"status":          r.Status,
+		"city":            r.Location.City,
+		"country":         r.Location.Country.Name,
+		"country_isocode": r.Location.Country.ISOCode,
+	}
 
-	m, err := influx.NewPoint(n,t,v,r.Timestamp)
+	m, err := influx.NewPoint(n, t, v, r.Timestamp)
 	if err != nil {
 		log.Warn(err)
 	}
 
 	return m
-	
+
 }
 
 func (r *Request) Marshal() ([]byte, error) {
@@ -104,43 +104,44 @@ func (r *Request) Marshal() ([]byte, error) {
 func (r *Request) printJson() {
 	j, err := json.Marshal(r)
 	if err != nil {
-    	log.Error("json")
+		log.Error("json")
 	}
 	fmt.Println(string(j))
 
 }
 
 func (r *Request) getLocation(geoipdb string) {
-    db, err := maxminddb.Open(geoipdb)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close()
+	db, err := maxminddb.Open(geoipdb)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
 
-    ip := net.ParseIP(r.Ip)
+	ip := net.ParseIP(r.Ip)
 
-    var record struct {
-        City    struct {
-            Names map[string]string `maxminddb:"names"`
-        } `maxminddb:"city"`
-        Country struct {
-            Names map[string]string `maxminddb:"names"`
-            ISOCode string `maxminddb:"iso_code"`
-        } `maxminddb:"country"`
-    } // Or any appropriate struct
+	var record struct {
+		City struct {
+			Names map[string]string `maxminddb:"names"`
+		} `maxminddb:"city"`
+		Country struct {
+			Names   map[string]string `maxminddb:"names"`
+			ISOCode string            `maxminddb:"iso_code"`
+		} `maxminddb:"country"`
+	} // Or any appropriate struct
 
-    err = db.Lookup(ip, &record)
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    r.Location.City = record.City.Names["en"] 
-    r.Location.Country.Name = record.Country.Names["en"]
-    r.Location.Country.ISOCode = record.Country.ISOCode
+	err = db.Lookup(ip, &record)
+	if err != nil {
+		log.Warnf("[WARN] error looking up geolocation for ip %s: %v", ip, err)
+		return
+	}
+
+	r.Location.City = record.City.Names["en"]
+	r.Location.Country.Name = record.Country.Names["en"]
+	r.Location.Country.ISOCode = record.Country.ISOCode
 }
 
 // Get data from the input string
-func (r *Request) getData(str string, geoipdb string) (error) {
+func (r *Request) getData(str string, geoipdb string) error {
 	var cli_ip string
 
 	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for, $proxy_address '
@@ -155,7 +156,7 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 	submatches := logline.FindStringSubmatch(str)
 
-	if len(submatches) != 14  || submatches[2] == "-" || submatches[2] == "localhost" {
+	if len(submatches) != 14 || submatches[2] == "-" || submatches[2] == "localhost" {
 		//log.Warn(str)
 		return errors.New("Bad format.")
 	}
@@ -168,7 +169,7 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 	r.Ip = cli_ip
 	r.Host = submatches[2]
-	r.Status =  submatches[7]
+	r.Status = submatches[7]
 	r.Referer = submatches[9]
 	r.Agent = submatches[10]
 	r.Uid = submatches[13]
@@ -180,7 +181,6 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 	return nil
 }
 
-
 // Initialize a new request from the input string
 func NewRequest(str string, geoipdb string) (*Request, error) {
 	req := &Request{}
@@ -190,33 +190,33 @@ func NewRequest(str string, geoipdb string) (*Request, error) {
 }
 
 type Requests struct {
-	Input 			chan *Request
-	Output 			chan *influx.Point
-	Exit 			chan os.Signal
-	Readers			[]chan struct{}
-	Config 			Params
+	Input   chan *Request
+	Output  chan *influx.Point
+	Exit    chan os.Signal
+	Readers []chan struct{}
+	Config  Params
 }
 
 func newRequests(conf Params) *Requests {
 	var r = &Requests{
 		Readers: []chan struct{}{},
-		Config:	conf,
+		Config:  conf,
 	}
 
-	r.Input = make(chan *Request,1)
-	r.Output = make(chan *influx.Point,1)
+	r.Input = make(chan *Request, 1)
+	r.Output = make(chan *influx.Point, 1)
 	r.Exit = make(chan os.Signal, 1)
 	signal.Notify(r.Exit, os.Interrupt, os.Kill)
 
 	customFormatter := new(log.TextFormatter)
-    customFormatter.TimestampFormat = "2006-01-02 15:04:05"
-    log.SetFormatter(customFormatter)
-    customFormatter.FullTimestamp = true
+	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
+	log.SetFormatter(customFormatter)
+	customFormatter.FullTimestamp = true
 
 	return r
 }
 
-func (r *Requests) Close(){
+func (r *Requests) Close() {
 	close(r.Input)
 	close(r.Output)
 	close(r.Exit)
@@ -225,8 +225,8 @@ func (r *Requests) Close(){
 
 func (r *Requests) sendToInflux() {
 	var points []influx.Point
-	var index,p_len int
-	
+	var index, p_len int
+
 	i := newInflux(r.Config.influxurl, r.Config.influxdb, r.Config.influxuser, r.Config.influxpass)
 
 	if i.Connect() {
@@ -237,46 +237,46 @@ func (r *Requests) sendToInflux() {
 
 		index = 0
 		for {
-	        select {
-	        case <-connected:
-	        	return
-	        case <-ticker.C:
-	        	if len(points) > 0 {
-	            	log.Info("Tick: Sending to influx ", len(points), " points")
-	    			if i.sendToInflux(points,1) {
-	    				points = []influx.Point{}
-	    			} else {
-	    				return
-	    			}
-	    		} else {
-	    			log.Info("Tick: Nothing to send")
-	    		}
-	        case p := <- r.Output:
-	        	if p != nil {
-	        		points = append(points, *p)
-	        		p_len = len(points)
-	        		if p_len == r.Config.limit {
-	            		log.Info("Batch: Sending to influx ", p_len, " points")
-	            		if i.sendToInflux(points,1) {
-	    					points = []influx.Point{}
-	    				} else {
-	    					return
-	    				}
-	            	}
-	            	index++
-	        	} else {
-	        		p_len = len(points)
-	        		if p_len > 0 {
-	        			log.Info("Batch: Sending to influx ", p_len, " points")
-	            		if i.sendToInflux(points,1) {
-	    					points = []influx.Point{}
-	    				}
-	        		}
-	        		return
-	        	}
-	        }
-	    }
-	} 
+			select {
+			case <-connected:
+				return
+			case <-ticker.C:
+				if len(points) > 0 {
+					log.Info("Tick: Sending to influx ", len(points), " points")
+					if i.sendToInflux(points, 1) {
+						points = []influx.Point{}
+					} else {
+						return
+					}
+				} else {
+					log.Info("Tick: Nothing to send")
+				}
+			case p := <-r.Output:
+				if p != nil {
+					points = append(points, *p)
+					p_len = len(points)
+					if p_len == r.Config.limit {
+						log.Info("Batch: Sending to influx ", p_len, " points")
+						if i.sendToInflux(points, 1) {
+							points = []influx.Point{}
+						} else {
+							return
+						}
+					}
+					index++
+				} else {
+					p_len = len(points)
+					if p_len > 0 {
+						log.Info("Batch: Sending to influx ", p_len, " points")
+						if i.sendToInflux(points, 1) {
+							points = []influx.Point{}
+						}
+					}
+					return
+				}
+			}
+		}
+	}
 }
 
 func (r *Requests) addReader() {
@@ -323,28 +323,28 @@ func (r *Requests) getDataByFile(f string, stop chan struct{}) {
 	defer log.Info("Closing ", f)
 
 	for {
-        select {
-        case <-ticker.C:
-        	filePos, _ := t.Tell()
-            log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
-        case line := <- t.Lines:
-        	if line != nil {
-            	r.getData(string(line.Text))
-        	} else {
-        		t.Stop()
-        		return
-        	}
-        case <- stop:
-        	t.Kill(nil)
-            return
-        }
-    }
+		select {
+		case <-ticker.C:
+			filePos, _ := t.Tell()
+			log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
+		case line := <-t.Lines:
+			if line != nil {
+				r.getData(string(line.Text))
+			} else {
+				t.Stop()
+				return
+			}
+		case <-stop:
+			t.Kill(nil)
+			return
+		}
+	}
 }
 
 func (r *Requests) getDataByFiles() {
 	var in, out sync.WaitGroup
-	indone := make(chan struct{},1)
-	outdone := make(chan struct{},1)
+	indone := make(chan struct{}, 1)
+	outdone := make(chan struct{}, 1)
 
 	i_chan := 0
 	for _, f := range r.Config.files {
@@ -376,24 +376,24 @@ func (r *Requests) getDataByFiles() {
 	}()
 
 	for {
-        select {
-        case <- indone:
-        	<- outdone
-        	return
-        case <- outdone:
-        	log.Error("Aborting...")
-        	go r.closeReaders()
-        	return
-        case <- r.Exit:
-        	//close(r.Exit)
-        	log.Info("Exit signal detected....Closing...")
-        	go r.closeReaders()
-        	select {
-        	case <- outdone:
-        		return
-        	}
-        }
-    }
+		select {
+		case <-indone:
+			<-outdone
+			return
+		case <-outdone:
+			log.Error("Aborting...")
+			go r.closeReaders()
+			return
+		case <-r.Exit:
+			//close(r.Exit)
+			log.Info("Exit signal detected....Closing...")
+			go r.closeReaders()
+			select {
+			case <-outdone:
+				return
+			}
+		}
+	}
 }
 
 func (r *Requests) getDataByLines(lines []string) {
@@ -406,7 +406,7 @@ func (r *Requests) getData(line string) {
 	req := &Request{}
 	err := req.getData(line, r.Config.geoipdb)
 	if err != nil {
-		log.Info("Error getting data, ", err)
+		//log.Info("Error getting data, ", err)
 	} else {
 		if r.Config.format == "json" {
 			r.Input <- req
@@ -435,28 +435,26 @@ func (r *Requests) getOutput() {
 
 func (r *Requests) printJson() {
 	for {
-        select {
-        case req := <- r.Input:
-        	if req != nil {
-            	req.printJson()
-        	} else {
-        		return
-        	}
-        }
-    }
+		select {
+		case req := <-r.Input:
+			if req != nil {
+				req.printJson()
+			} else {
+				return
+			}
+		}
+	}
 }
 
 func (r *Requests) printInflux() {
 	for {
-        select {
-        case p := <- r.Output:
-        	if p != nil {
-            	fmt.Println(p.String())
-        	} else {
-        		return
-        	}
-        }
-    }
+		select {
+		case p := <-r.Output:
+			if p != nil {
+				fmt.Println(p.String())
+			} else {
+				return
+			}
+		}
+	}
 }
-
-

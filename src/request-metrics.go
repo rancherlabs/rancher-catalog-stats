@@ -1,10 +1,9 @@
 package main
 
-import (
-)
+import ()
 
-func main(){
-	var params Params 
+func main() {
+	var params Params
 
 	params.init()
 
