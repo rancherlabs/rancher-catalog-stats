@@ -168,6 +168,11 @@ func (r *Request) getData(str string, geoipdb string) error {
 		cli_ip = submatches[4]
 	}
 
+	if strings.Contains(cli_ip, ",") {
+		ips := strings.Split(cli_ip, ",")
+		cli_ip = ips[len(ips)-1]
+	}
+
 	r.Ip = cli_ip
 	r.Host = submatches[2]
 	r.Status = submatches[7]
