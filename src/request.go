@@ -143,10 +143,10 @@ func (r *Request) getLocation(geoipdb string) {
 func (r *Request) getData(str string, geoipdb string) (error) {
 	var cli_ip string
 
-	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for '
+	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for, $proxy_address '
 	//                        '"$request" $status $body_bytes_sent "$http_referer" '
 	//                        '"$http_user_agent" $request_time $upstream_response_time "$http_x_install_uuid"';
-	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\"")
+	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+), ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\"")
 
 	if err != nil {
 		log.Fatal(err)
@@ -155,7 +155,7 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 	submatches := logline.FindStringSubmatch(str)
 
-	if len(submatches) != 13  || submatches[2] == "-" || submatches[2] == "localhost" {
+	if len(submatches) != 14  || submatches[2] == "-" || submatches[2] == "localhost" {
 		//log.Warn(str)
 		return errors.New("Bad format.")
 	}
@@ -168,13 +168,13 @@ func (r *Request) getData(str string, geoipdb string) (error) {
 
 	r.Ip = cli_ip
 	r.Host = submatches[2]
-	r.Status =  submatches[6]
-	r.Referer = submatches[8]
-	r.Agent = submatches[9]
-	r.Uid = submatches[12]
+	r.Status =  submatches[7]
+	r.Referer = submatches[9]
+	r.Agent = submatches[10]
+	r.Uid = submatches[13]
 
 	r.parseTimestamp(submatches[1])
-	r.parseRequest(submatches[5])
+	r.parseRequest(submatches[6])
 	r.getLocation(geoipdb)
 
 	return nil
@@ -310,12 +310,23 @@ func (r *Requests) getDataByFile(f string, stop chan struct{}) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fileInfo, err := os.Stat(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// get the size
+	fileSize := fileInfo.Size()
+
+	ticker := time.NewTicker(time.Second * time.Duration(60))
 
 	defer close(stop)
 	defer log.Info("Closing ", f)
 
 	for {
         select {
+        case <-ticker.C:
+        	filePos, _ := t.Tell()
+            log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
         case line := <- t.Lines:
         	if line != nil {
             	r.getData(string(line.Text))
@@ -395,7 +406,7 @@ func (r *Requests) getData(line string) {
 	req := &Request{}
 	err := req.getData(line, r.Config.geoipdb)
 	if err != nil {
-		//log.Info("Error getting data, ", err)
+		log.Info("Error getting data, ", err)
 	} else {
 		if r.Config.format == "json" {
 			r.Input <- req
