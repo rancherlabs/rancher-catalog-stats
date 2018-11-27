@@ -132,6 +132,7 @@ func (r *Request) getLocation(geoipdb string) {
 	err = db.Lookup(ip, &record)
 	if err != nil {
 		log.Warnf("[WARN] error looking up geolocation for ip %s: %v", ip, err)
+		r.printJson()
 		return
 	}
 
