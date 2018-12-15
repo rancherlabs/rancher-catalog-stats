@@ -370,7 +370,9 @@ func (r *Requests) getDataByFile(f string, stop chan struct{}) {
 		select {
 		case <-ticker.C:
 			filePos, _ := t.Tell()
-			log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
+			if fileSize > 0 {
+				log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
+			}
 		case line := <-t.Lines:
 			if line != nil {
 				r.getData(string(line.Text))
