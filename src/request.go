@@ -145,11 +145,21 @@ func (r *Request) getLocation(geoipdb string) {
 func (r *Request) getData(str string, geoipdb string) error {
 	var cli_ip string
 
+	// Log format V2 with Cloudfare info
 	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for, $proxy_address '
 	//                        '"$request" $status $body_bytes_sent "$http_referer" '
 	//                        '"$http_user_agent" $request_time $upstream_response_time "$http_x_install_uuid"';
-	logline, err := regexp.Compile("^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+), ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\"")
+	logFormatV2 := "^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+), ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\""
+	
+	// Log format V1 direct connection
+	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for '
+	//                        '"$request" $status $body_bytes_sent "$http_referer" '
+	//                        '"$http_user_agent" $request_time $upstream_response_time "$http_x_install_uuid"';
+	logFormatV1 := "^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\""
 
+	logFormatVersion := "2"
+
+	logline, err := regexp.Compile(logFormatV2)
 	if err != nil {
 		log.Fatal(err)
 		return err
@@ -157,8 +167,22 @@ func (r *Request) getData(str string, geoipdb string) error {
 
 	submatches := logline.FindStringSubmatch(str)
 
-	if len(submatches) != 14 || submatches[2] == "-" || submatches[2] == "localhost" {
-		//log.Warn(str)
+	// If log format is not V2, trying with log format V1 
+	if len(submatches) == 0 {
+		logline, err = regexp.Compile(logFormatV1)
+		if err != nil {
+			log.Fatal(err)
+			return err
+		}
+		submatches = logline.FindStringSubmatch(str)
+		if len(submatches) > 0 {
+			logFormatVersion = "1"
+		}
+	}
+
+
+	if (len(submatches) != 14 && len(submatches) != 13) || submatches[2] == "-" || submatches[2] == "localhost" {
+		//log.Warn(submatches)
 		return errors.New("Bad format.")
 	}
 
@@ -175,14 +199,24 @@ func (r *Request) getData(str string, geoipdb string) error {
 
 	r.Ip = cli_ip
 	r.Host = submatches[2]
-	r.Status = submatches[7]
-	r.Referer = submatches[9]
-	r.Agent = submatches[10]
-	r.Uid = submatches[13]
-
 	r.parseTimestamp(submatches[1])
-	r.parseRequest(submatches[6])
 	r.getLocation(geoipdb)
+
+	if logFormatVersion == "2" {
+		r.Status = submatches[7]
+		r.Referer = submatches[9]
+		r.Agent = submatches[10]
+		r.Uid = submatches[13]
+		r.parseRequest(submatches[6])
+	}
+
+	if logFormatVersion == "1" {
+		r.Status =  submatches[6]
+		r.Referer = submatches[8]
+		r.Agent = submatches[9]
+		r.Uid = submatches[12]
+		r.parseRequest(submatches[5])
+	}
 
 	return nil
 }
@@ -218,6 +252,10 @@ func newRequests(conf Params) *Requests {
 	customFormatter.TimestampFormat = "2006-01-02 15:04:05"
 	log.SetFormatter(customFormatter)
 	customFormatter.FullTimestamp = true
+
+	if conf.debug {
+		log.SetLevel(log.DebugLevel)
+	}
 
 	return r
 }
@@ -412,7 +450,7 @@ func (r *Requests) getData(line string) {
 	req := &Request{}
 	err := req.getData(line, r.Config.geoipdb)
 	if err != nil {
-		//log.Info("Error getting data, ", err)
+		log.Debug("Error getting data, ", err)
 	} else {
 		if r.Config.format == "json" {
 			r.Input <- req

@@ -45,11 +45,11 @@ func (i *Influx) Check(retry int) bool {
 			log.Error("Failed to connect to influx ", i.url)
 			return false
 		} else {
-			log.Info("Influx response time: ", resp_time)
+			log.Debug("Influx response time: ", resp_time)
 			return true
 		}
 	} else {
-		log.Info("Influx response time: ", resp_time)
+		log.Debug("Influx response time: ", resp_time)
 		return true
 	}
 }
@@ -81,7 +81,7 @@ func (i *Influx) CheckConnect(interval int) chan bool {
 
 func (i *Influx) Connect() bool {
 	var err error
-	log.Info("Connecting to Influx...")
+	log.Debug("Connecting to Influx...")
 
 	i.cli, err = influx.NewHTTPClient(influx.HTTPConfig{
 		Addr:     i.url,
@@ -110,12 +110,12 @@ func (i *Influx) Close() {
 	message := "Closing Influx connection..."
 	err := i.cli.Close()
 	check(err, message)
-	log.Info(message)
+	log.Debug(message)
 }
 
 func (i *Influx) createDb() {
 	var err error
-	log.Info("Creating Influx database if not exists...")
+	log.Debug("Creating Influx database if not exists...")
 
 	comm := "CREATE DATABASE " + i.db
 
@@ -124,7 +124,7 @@ func (i *Influx) createDb() {
 	if err != nil {
 		log.Error("[Error] ", err)
 	} else {
-		log.Info("Influx database ", i.db, " created.")
+		log.Debug("Influx database ", i.db, " created.")
 	}
 }
 
@@ -136,7 +136,7 @@ func (i *Influx) newBatch() {
 		Precision: "s",
 	})
 	check(err, message)
-	log.Info(message)
+	log.Debug(message)
 
 }
 
@@ -149,7 +149,7 @@ func (i *Influx) newPoint(m influx.Point) {
 }
 
 func (i *Influx) newPoints(m []influx.Point) {
-	log.Info("Adding ", len(m), " points to batch...")
+	log.Debug("Adding ", len(m), " points to batch...")
 	for index := range m {
 		i.newPoint(m[index])
 	}
@@ -157,7 +157,7 @@ func (i *Influx) newPoints(m []influx.Point) {
 
 func (i *Influx) Write() {
 	start := time.Now()
-	log.Info("Writing batch points...")
+	log.Debug("Writing batch points...")
 
 	// Write the batch
 	err := i.cli.Write(i.batch)
@@ -166,7 +166,7 @@ func (i *Influx) Write() {
 
 	}
 
-	log.Info("Time to write ", len(i.batch.Points()), " points: ", float64((time.Since(start))/time.Millisecond), "ms")
+	log.Debug("Time to write ", len(i.batch.Points()), " points: ", float64((time.Since(start))/time.Millisecond), "ms")
 }
 
 func (i *Influx) sendToInflux(m []influx.Point, retry int) bool {

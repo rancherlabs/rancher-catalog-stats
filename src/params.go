@@ -24,6 +24,7 @@ type Params struct {
 	files      []string
 	refresh    int
 	daemon     bool
+	debug      bool
 	poll       bool
 }
 
@@ -31,6 +32,7 @@ func (p *Params) init() {
 	var file_path string
 	var err error
 
+	flag.BoolVar(&p.debug, "debug", false, "Debug mode")
 	flag.StringVar(&p.format, "format", "influx", "Output format. influx | json")
 	flag.StringVar(&p.influxurl, "influxurl", "http://localhost:8086", "Influx url connection")
 	flag.StringVar(&p.influxdb, "influxdb", "", "Influx db name")
