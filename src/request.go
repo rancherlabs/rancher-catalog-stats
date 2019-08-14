@@ -4,10 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/hpcloud/tail"
-	influx "github.com/influxdata/influxdb1-client/v2"
-	"github.com/oschwald/maxminddb-golang"
 	"net"
 	"os"
 	"os/signal"
@@ -16,6 +12,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	_ "github.com/influxdata/influxdb1-client"
+	influx "github.com/influxdata/influxdb1-client/v2"
+	log "github.com/sirupsen/logrus"
+	"github.com/hpcloud/tail"
+	"github.com/oschwald/maxminddb-golang"
 )
 
 type reqLocation struct {

@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"time"
-	log "github.com/Sirupsen/logrus"
+
+	_ "github.com/influxdata/influxdb1-client"
 	influx "github.com/influxdata/influxdb1-client/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 type Influx struct {

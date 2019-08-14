@@ -2,8 +2,9 @@ package main
 
 import (
 	"flag"
-	log "github.com/Sirupsen/logrus"
 	"os"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const (
