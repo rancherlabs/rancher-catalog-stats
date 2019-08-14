@@ -23,6 +23,7 @@ RUN  curl -sS http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.t
     mv GeoLite2-City_*/GeoLite2-City.mmdb . && \
     rm -rf GeoLite2-City_* && \
     addgroup -g ${SERVICE_GID} ${SERVICE_GROUP} && \
-    adduser -g "${SERVICE_NAME} user" -D -h ${SERVICE_HOME} -G ${SERVICE_GROUP} -s /sbin/nologin -u ${SERVICE_UID} ${SERVICE_USER}
+    adduser -g "${SERVICE_NAME} user" -D -h ${SERVICE_HOME} -G ${SERVICE_GROUP} -s /sbin/nologin -u ${SERVICE_UID} ${SERVICE_USER} && \
+    chown -R ${SERVICE_USER}:${SERVICE_GROUP} ${SERVICE_HOME}
 USER $SERVICE_USER
 
