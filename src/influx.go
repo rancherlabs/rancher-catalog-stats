@@ -1,9 +1,10 @@
 package main
 
 import (
-	log "github.com/Sirupsen/logrus"
-	influx "github.com/influxdata/influxdb/client/v2"
+	"fmt"
 	"time"
+	log "github.com/Sirupsen/logrus"
+	influx "github.com/influxdata/influxdb1-client/v2"
 )
 
 type Influx struct {
@@ -29,32 +30,26 @@ func newInflux(u, d, us, pa string) *Influx {
 }
 
 func (i *Influx) Check(retry int) bool {
-	resp_time, _, err := i.cli.Ping(i.timeout)
-	if err != nil {
-		log.Error("[Error]: ", err)
-		log.Error("Influx disconnected...")
-		connected := false
-		for index := 0; index < retry && !connected; index++ {
+	connected := i.Connect()
+	for index := 0; index < retry && !connected; index, connected = index+1, i.Connect() {
+		if !connected {
+			wait := index + 1 * 5 
+			log.Error("Influx disconnected...")
 			log.Error("Reconnecting ", index+1, " of ", retry, "...")
-			connected = i.Connect()
-			if !connected {
-				time.Sleep(time.Duration(1) * time.Second)
-			}
+			log.Info("Waiting ", wait, " seconds before retry...")
+			time.Sleep(time.Duration(wait) * time.Second)
 		}
-		if err != nil {
-			log.Error("Failed to connect to influx ", i.url)
-			return false
-		} else {
-			log.Debug("Influx response time: ", resp_time)
-			return true
-		}
-	} else {
-		log.Debug("Influx response time: ", resp_time)
-		return true
 	}
+
+	if !connected {
+		log.Error("Failed to connect to influx ", i.url)
+		return false
+	} 
+
+	return true
 }
 
-func (i *Influx) CheckConnect(interval int) chan bool {
+func (i *Influx) CheckConnect(interval int, stop chan struct{}) chan bool {
 	ticker := time.NewTicker(time.Second * time.Duration(interval))
 
 	connected := make(chan bool)
@@ -66,12 +61,14 @@ func (i *Influx) CheckConnect(interval int) chan bool {
 			case <-ticker.C:
 				if !running {
 					running = true
-					if !i.Check(2) {
+					if !i.Check(5) {
 						close(connected)
 						return
 					}
 					running = false
 				}
+			case <-stop:
+				return
 			}
 		}
 	}()
@@ -81,6 +78,16 @@ func (i *Influx) CheckConnect(interval int) chan bool {
 
 func (i *Influx) Connect() bool {
 	var err error
+	if i.cli != nil {
+		resp_time, _, err := i.cli.Ping(i.timeout)
+		if err != nil {
+			log.Error("[Error]: ", err)
+			return false
+		}
+		log.Debug("Influx response time: ", resp_time)
+		return true
+	}
+
 	log.Debug("Connecting to Influx...")
 
 	i.cli, err = influx.NewHTTPClient(influx.HTTPConfig{
@@ -94,12 +101,12 @@ func (i *Influx) Connect() bool {
 		return false
 	}
 
-	if i.Check(0) {
-		i.createDb()
-		return true
-	} else {
+	err = i.createDb()
+	if err != nil {
+		log.Error("[Error]: ", err)
 		return false
 	}
+	return true
 }
 
 func (i *Influx) Init() {
@@ -113,7 +120,7 @@ func (i *Influx) Close() {
 	log.Debug(message)
 }
 
-func (i *Influx) createDb() {
+func (i *Influx) createDb() error {
 	var err error
 	log.Debug("Creating Influx database if not exists...")
 
@@ -122,10 +129,11 @@ func (i *Influx) createDb() {
 	q := influx.NewQuery(comm, "", "")
 	_, err = i.cli.Query(q)
 	if err != nil {
-		log.Error("[Error] ", err)
-	} else {
-		log.Debug("Influx database ", i.db, " created.")
+		return fmt.Errorf("[Error] %v", err)
 	}
+	log.Debug("Influx database ", i.db, " created.")
+
+	return nil
 }
 
 func (i *Influx) newBatch() {
@@ -175,7 +183,6 @@ func (i *Influx) sendToInflux(m []influx.Point, retry int) bool {
 		i.newPoints(m)
 		i.Write()
 		return true
-	} else {
-		return false
-	}
+	} 
+	return false
 }

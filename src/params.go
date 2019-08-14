@@ -4,7 +4,11 @@ import (
 	"flag"
 	log "github.com/Sirupsen/logrus"
 	"os"
-	"path/filepath"
+)
+
+const (
+	formatJson   = "json"
+	formatInflux = "influx"
 )
 
 func check(e error, m string) {
@@ -21,50 +25,52 @@ type Params struct {
 	geoipdb    string
 	format     string
 	limit      int
-	files      []string
+	filesPath  string
 	refresh    int
 	daemon     bool
 	debug      bool
 	poll       bool
+	preview    bool
 }
 
 func (p *Params) init() {
-	var file_path string
-	var err error
-
 	flag.BoolVar(&p.debug, "debug", false, "Debug mode")
-	flag.StringVar(&p.format, "format", "influx", "Output format. influx | json")
+	flag.StringVar(&p.format, "format", formatInflux, "Output format. " + formatInflux + " | " + formatJson)
 	flag.StringVar(&p.influxurl, "influxurl", "http://localhost:8086", "Influx url connection")
 	flag.StringVar(&p.influxdb, "influxdb", "", "Influx db name")
 	flag.StringVar(&p.influxuser, "influxuser", "", "Influx username")
 	flag.StringVar(&p.influxpass, "influxpass", "", "Influx password")
-	flag.StringVar(&file_path, "filepath", "/var/log/nginx/access.log", "Log files to analyze, wildcard allowed between quotes.")
+	flag.StringVar(&p.filesPath, "filepath", "/var/log/nginx/access.log", "Log files to analyze, wildcard allowed between quotes.")
 	flag.StringVar(&p.geoipdb, "geoipdb", "GeoLite2-City.mmdb", "Geoip db file.")
 	flag.BoolVar(&p.daemon, "daemon", false, "Run in daemon mode. Tail files and send metrics continuously by limit or by refresh")
 	flag.BoolVar(&p.poll, "poll", false, "Use poll instead of inotify. daemon mode")
+	flag.BoolVar(&p.preview, "preview", false, "Print metrics to stdout")
 	flag.IntVar(&p.limit, "limit", 2000, "Limit batch size")
 	flag.IntVar(&p.refresh, "refresh", 120, "Send metrics every refresh seconds. daemon mode")
 
 	flag.Parse()
 
-	p.files, err = filepath.Glob(file_path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	p.checkParams()
 }
 
 func (p *Params) checkParams() {
-	if p.format != "influx" && p.format != "json" {
+	if !p.daemon && p.poll {
+		log.Warn("Setting -poll to false due to not daemon mode")
+		p.poll = false
+	}
+	if p.format == formatJson && !p.preview {
+		log.Warn("Setting -preview to true due to json format")
+		p.preview = true
+	}
+	if p.format != formatInflux && p.format != formatJson {
 		flag.Usage()
-		log.Info("Check your format params. influx | json ")
+		log.Error("Check your format params, " + formatInflux + " | " + formatJson)
 		os.Exit(1)
 	}
-	if p.format == "influx" {
+	if p.format == "influx" && !p.preview {
 		if len(p.influxdb) == 0 || len(p.influxurl) == 0 {
 			flag.Usage()
-			log.Info("Check your influxdb and/or influxurl params.")
+			log.Error("Check your influxdb and/or influxurl params.")
 			os.Exit(1)
 		}
 	}

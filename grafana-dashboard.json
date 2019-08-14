@@ -11,7 +11,7 @@
       "type": "panel",
       "id": "grafana-worldmap-panel",
       "name": "Worldmap Panel",
-      "version": "0.1.2"
+      "version": "0.2.0"
     },
     {
       "type": "panel",
@@ -43,7 +43,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1540488999287,
+  "iteration": 1565772009848,
   "links": [],
   "panels": [
     {
@@ -346,7 +346,7 @@
         {
           "dsType": "influxdb",
           "groupBy": [],
-          "hide": false,
+          "hide": true,
           "measurement": "requests",
           "orderByTime": "ASC",
           "policy": "default",
@@ -378,7 +378,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Rancher unique UID requests v1.x",
+      "title": "Rancher unique UID requests v1.x (NOT WORKING)",
       "type": "singlestat",
       "valueFontSize": "80%",
       "valueMaps": [
@@ -464,7 +464,7 @@
           "measurement": "requests_1h",
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(distinct(ip)) FROM byIp_$agg_time WHERE \"path\" =~ /\\/repos\\/rancher-catalog\\/commits\\/v2.0-(.*)/ OR \"path\" =~ /\\/repos\\/charts/  AND $timeFilter GROUP BY time($agg_time)",
+          "query": "SELECT sum(\"unique\") FROM byCountry_$agg_time WHERE \"path\" =~ /\\/repos\\/rancher-catalog\\/commits\\/v2.0-(.*)/ OR \"path\" =~ /\\/repos\\/charts/  AND $timeFilter GROUP BY time($agg_time)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -568,7 +568,7 @@
         {
           "dsType": "influxdb",
           "groupBy": [],
-          "hide": false,
+          "hide": true,
           "measurement": "requests",
           "orderByTime": "ASC",
           "policy": "default",
@@ -600,7 +600,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Rancher unique UID requests v2.x",
+      "title": "Rancher unique UID requests v2.x (NOT WORKING)",
       "type": "singlestat",
       "valueFontSize": "80%",
       "valueMaps": [
@@ -676,7 +676,7 @@
         {
           "dsType": "influxdb",
           "groupBy": [],
-          "hide": false,
+          "hide": true,
           "measurement": "requests",
           "orderByTime": "ASC",
           "policy": "default",
@@ -708,7 +708,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Rancher total UID v1.x",
+      "title": "Rancher total UID v1.x (NOT WORKING)",
       "type": "singlestat",
       "valueFontSize": "80%",
       "valueMaps": [
@@ -784,7 +784,7 @@
         {
           "dsType": "influxdb",
           "groupBy": [],
-          "hide": false,
+          "hide": true,
           "measurement": "requests",
           "orderByTime": "ASC",
           "policy": "default",
@@ -816,7 +816,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Rancher total UID v2.x",
+      "title": "Rancher total UID v2.x (NOT WORKING)",
       "type": "singlestat",
       "valueFontSize": "80%",
       "valueMaps": [
@@ -895,7 +895,7 @@
               "type": "tag"
             }
           ],
-          "hide": false,
+          "hide": true,
           "measurement": "requests_1h",
           "orderByTime": "ASC",
           "policy": "default",
@@ -948,7 +948,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT count(distinct(uid)) FROM byUid_history_$agg_time WHERE \"path\" =~ /rancher-catalog/ AND $timeFilter GROUP BY time($agg_time)",
@@ -970,54 +970,12 @@
             ]
           ],
           "tags": []
-        },
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "byUid_history_24h",
-          "orderByTime": "ASC",
-          "policy": "default",
-          "refId": "C",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": [
-            {
-              "key": "path",
-              "operator": "=",
-              "value": "select tag value"
-            }
-          ]
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Unique requests by UID/path v1.x",
+      "title": "Unique requests by UID/path v1.x (NOT WORKING)",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -1109,7 +1067,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT count(distinct(uid)) FROM byUid_history_$agg_time  WHERE \"path\" =~ /\\/repos\\/community-catalog\\/commits\\/v2.0-(.*)/  AND $timeFilter GROUP BY time($agg_time) ",
@@ -1155,7 +1113,7 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
           "query": "SELECT count(distinct(uid)) FROM byUid_history_$agg_time  WHERE \"path\" =~ /\\/repos\\/rancher-catalog\\/commits\\/v2.0-(.*)/  AND $timeFilter GROUP BY time($agg_time) ",
@@ -1195,10 +1153,10 @@
               "type": "fill"
             }
           ],
-          "hide": false,
+          "hide": true,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(distinct(uid)) FROM byUid_history_$agg_time WHERE \"path\" =~ /\\/repos\\/charts/ AND $timeFilter GROUP BY time($agg_time) ",
+          "query": "SELECT count(distinct(uid)) FROM byUid_history_$agg_time WHERE \"path\" =~ /\\/repos\\/charts/ AND $timeFilter GROUP BY time($agg_time)",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1223,12 +1181,51 @@
               "value": "select tag value"
             }
           ]
+        },
+        {
+          "alias": "system-charts",
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": true,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT count(distinct(uid)) FROM byUid_history_$agg_time WHERE \"path\" =~ /\\/repos\\/system-charts/ AND $timeFilter GROUP BY time($agg_time)",
+          "rawQuery": true,
+          "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
         }
       ],
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Unique requests by UID/path v2.x",
+      "title": "Unique requests by UID/path v2.x (NOT WORKING)",
       "tooltip": {
         "shared": true,
         "sort": 2,
@@ -1495,7 +1492,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(distinct(ip)) FROM byIp_$agg_time WHERE \"path\" =~ /\\/repos\\/community-catalog\\/commits\\/v2.0-(.*)/ AND $timeFilter GROUP BY time($agg_time) ",
+          "query": "SELECT sum(\"unique\") FROM byCountry_$agg_time WHERE \"path\" =~ /\\/repos\\/community-catalog\\/commits\\/v2.0-(.*)/ AND $timeFilter GROUP BY time($agg_time) ",
           "rawQuery": true,
           "refId": "C",
           "resultFormat": "time_series",
@@ -1535,7 +1532,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(distinct(ip)) FROM byIp_$agg_time WHERE \"path\" =~ /\\/repos\\/rancher-catalog\\/commits\\/v2.0-(.*)/ AND $timeFilter GROUP BY time($agg_time) ",
+          "query": "SELECT sum(\"unique\") FROM byCountry_$agg_time WHERE \"path\" =~ /\\/repos\\/rancher-catalog\\/commits\\/v2.0-(.*)/ AND $timeFilter GROUP BY time($agg_time) ",
           "rawQuery": true,
           "refId": "D",
           "resultFormat": "time_series",
@@ -1575,7 +1572,7 @@
           "hide": false,
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT count(distinct(ip)) FROM byIp_$agg_time WHERE \"path\" =~ /\\/repos\\/charts/ AND $timeFilter GROUP BY time($agg_time) ",
+          "query": "SELECT sum(\"unique\") FROM byCountry_$agg_time WHERE \"path\" =~ /\\/repos\\/charts/ AND $timeFilter GROUP BY time($agg_time) ",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -2226,5 +2223,5 @@
   "timezone": "browser",
   "title": "catalog",
   "uid": "000000003",
-  "version": 38
+  "version": 40
 }

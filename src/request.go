@@ -6,11 +6,12 @@ import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/hpcloud/tail"
-	influx "github.com/influxdata/influxdb/client/v2"
+	influx "github.com/influxdata/influxdb1-client/v2"
 	"github.com/oschwald/maxminddb-golang"
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -64,12 +65,6 @@ func (req *Request) parseTimestamp(str string) error {
 	return err
 }
 
-// Produce wire-formatted string for ingestion into influxdb
-func (r *Request) printInflux() {
-	p := r.getPoint()
-	fmt.Println(p.String())
-}
-
 func (r *Request) getPoint() *influx.Point {
 	var n = "requests"
 	v := map[string]interface{}{
@@ -108,6 +103,11 @@ func (r *Request) printJson() {
 	}
 	fmt.Println(string(j))
 
+}
+
+func (r *Request) printInflux() {
+	p := r.getPoint()
+	fmt.Println(p.String())
 }
 
 func (r *Request) getLocation(geoipdb string) {
@@ -221,6 +221,72 @@ func (r *Request) getData(str string, geoipdb string) error {
 	return nil
 }
 
+type ChannelList struct{ 
+	Readers map[string](chan struct{})
+	Writers map[string](chan *Request)
+}
+
+func NewChannelList() *ChannelList {
+	c := &ChannelList{
+		Readers: map[string]chan struct{}{},
+		Writers: map[string]chan *Request{},
+	}
+	return c
+}
+
+func (c *ChannelList) addReader(f string) chan struct{} {
+	newChan := make(chan struct{}, 1)
+	c.Readers[f] = newChan
+
+	return newChan
+}
+
+func (c *ChannelList) addWriter(f string) chan *Request {
+	newChan := make(chan *Request, 1)
+	c.Writers[f] = newChan
+
+	return newChan
+}
+
+func (c *ChannelList) Add(f string) (chan struct{}, chan *Request, error) {
+	if len(f) == 0 {
+		return nil, nil, fmt.Errorf("Channel name is nil")
+	}
+
+	return c.addReader(f), c.addWriter(f), nil
+}
+
+func (c *ChannelList) Get(f string) (chan struct{}, chan *Request, bool) {
+	r, rok := c.Readers[f]
+	w, wok := c.Writers[f]
+	return r, w, rok && wok
+}
+
+func (c *ChannelList) Delete(k string) {
+	if reader, writer, ok := c.Get(k); ok {
+		close(reader)
+		close(writer)
+	}
+	delete(c.Readers, k)
+	delete(c.Writers, k)
+}
+
+func (c *ChannelList) Send(k string) {
+	if c.Readers[k] != nil {
+		c.Readers[k] <- struct{}{}
+	}
+}
+
+func (c *ChannelList) SendAll() {
+	for k, _ := range c.Readers {
+		c.Send(k)
+	}
+}
+
+func (c *ChannelList) Len() int {
+	return len(c.Readers)
+}
+
 // Initialize a new request from the input string
 func NewRequest(str string, geoipdb string) (*Request, error) {
 	req := &Request{}
@@ -230,21 +296,17 @@ func NewRequest(str string, geoipdb string) (*Request, error) {
 }
 
 type Requests struct {
-	Input   chan *Request
-	Output  chan *influx.Point
 	Exit    chan os.Signal
-	Readers []chan struct{}
+	Control *ChannelList
 	Config  Params
 }
 
 func newRequests(conf Params) *Requests {
 	var r = &Requests{
-		Readers: []chan struct{}{},
+		Control: NewChannelList(),
 		Config:  conf,
 	}
 
-	r.Input = make(chan *Request, 1)
-	r.Output = make(chan *influx.Point, 1)
 	r.Exit = make(chan os.Signal, 1)
 	signal.Notify(r.Exit, os.Interrupt, os.Kill)
 
@@ -261,20 +323,20 @@ func newRequests(conf Params) *Requests {
 }
 
 func (r *Requests) Close() {
-	close(r.Input)
-	close(r.Output)
 	close(r.Exit)
 
 }
 
-func (r *Requests) sendToInflux() {
+func (r *Requests) sendToInflux(data chan *Request) {
 	var points []influx.Point
 	var index, p_len int
 
 	i := newInflux(r.Config.influxurl, r.Config.influxdb, r.Config.influxuser, r.Config.influxpass)
 
-	if i.Connect() {
-		connected := i.CheckConnect(r.Config.refresh)
+	if i.Check(5) {
+		stop := make(chan struct{}, 1)
+		connected := i.CheckConnect(r.Config.refresh, stop)
+		defer close(stop)
 		defer i.Close()
 
 		ticker := time.NewTicker(time.Second * time.Duration(r.Config.refresh))
@@ -285,101 +347,79 @@ func (r *Requests) sendToInflux() {
 			case <-connected:
 				return
 			case <-ticker.C:
+				log.Info("Sync: Sending ", len(points), " points")
 				if len(points) > 0 {
-					log.Info("Tick: Sending to influx ", len(points), " points")
-					if i.sendToInflux(points, 1) {
-						points = []influx.Point{}
-					} else {
+					if !i.sendToInflux(points, 1) {
 						return
 					}
-				} else {
-					log.Info("Tick: Nothing to send")
+					points = []influx.Point{}
 				}
-			case p := <-r.Output:
-				if p != nil {
-					points = append(points, *p)
-					p_len = len(points)
-					if p_len == r.Config.limit {
-						log.Info("Batch: Sending to influx ", p_len, " points")
-						if i.sendToInflux(points, 1) {
-							points = []influx.Point{}
-						} else {
-							return
-						}
-					}
-					index++
-				} else {
+			case req, ok := <-data:
+				if !ok {
 					p_len = len(points)
 					if p_len > 0 {
-						log.Info("Batch: Sending to influx ", p_len, " points")
+						log.Info("Finalyzing batch: Sending ", p_len, " points")
 						if i.sendToInflux(points, 1) {
 							points = []influx.Point{}
 						}
 					}
 					return
 				}
+				p := req.getPoint()
+				points = append(points, *p)
+				p_len = len(points)
+				if p_len == r.Config.limit {
+					log.Info("Running batch: Sending ", p_len, " points")
+					if !i.sendToInflux(points, 1) {
+						return
+					}
+					points = []influx.Point{}
+				}
+				index++
 			}
 		}
 	}
 }
 
-func (r *Requests) addReader() {
-	chan_new := make(chan struct{}, 1)
-	r.Readers = append(r.Readers, chan_new)
-}
-
-func (r *Requests) closeReaders() {
-	for _, r_chan := range r.Readers {
-		if r_chan != nil {
-			r_chan <- struct{}{}
-		}
-	}
-	r.Readers = nil
-}
-
-func (r *Requests) getDataByFile(f string, stop chan struct{}) {
-	var t_mode tail.Config
-	if r.Config.daemon {
-		if r.Config.poll {
-			t_mode = tail.Config{Follow: true, ReOpen: true, Poll: true}
-		} else {
-			t_mode = tail.Config{Follow: true, ReOpen: true, Poll: false}
-		}
-	} else {
-		t_mode = tail.Config{Follow: false, ReOpen: false, Poll: false}
-	}
+func (r *Requests) getDataByFile(f string) {
+	t_mode := tail.Config{Follow: r.Config.daemon, ReOpen: r.Config.daemon, Poll: r.Config.poll}
 
 	log.Info("Analyzing ", f)
 	t, err := tail.TailFile(f, t_mode)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fileInfo, err := os.Stat(f)
-	if err != nil {
-		log.Fatal(err)
+
+	stop, data, ok := r.Control.Get(f)
+	if !ok {
+		log.Error("Getting reader channels ", f)
+		return
 	}
-	// get the size
-	fileSize := fileInfo.Size()
+
+	defer log.Info("Closed file ", f)
+	defer t.Cleanup()
 
 	ticker := time.NewTicker(time.Second * time.Duration(60))
-
-	defer close(stop)
-	defer log.Info("Closing ", f)
 
 	for {
 		select {
 		case <-ticker.C:
+			fileInfo, err := os.Stat(f)
+			if os.IsNotExist(err) {
+				log.Infof("File %s not exist, closing...", f)
+				t.Kill(nil)
+        		return
+    		}
 			filePos, _ := t.Tell()
-			if fileSize > 0 {
+			if fileSize := fileInfo.Size(); fileSize > 0 {
 				log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
 			}
 		case line := <-t.Lines:
-			if line != nil {
-				r.getData(string(line.Text))
-			} else {
+			if line == nil {
 				t.Stop()
 				return
 			}
+			r.getData(string(line.Text), data)
 		case <-stop:
 			t.Kill(nil)
 			return
@@ -387,32 +427,57 @@ func (r *Requests) getDataByFile(f string, stop chan struct{}) {
 	}
 }
 
+func (r *Requests) getReadersByFiles(in, out *sync.WaitGroup) {
+	files, err := filepath.Glob(r.Config.filesPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	newFiles := 0
+	for _, f := range files {
+		if _, _, ok := r.Control.Get(f); ok {
+			continue
+		}
+
+		_, _, err := r.Control.Add(f)
+		if err != nil {
+			log.Error("Creating control channels ", f)
+			continue
+		}
+
+		in.Add(1)
+		go func(file string) {
+			defer in.Done()
+			defer r.Control.Delete(file)
+			defer log.Debug("Closed reader ", file)
+			r.getDataByFile(file)
+		}(f)
+
+		out.Add(1)
+		go func(file string) {
+			defer out.Done()
+			defer log.Debug("Closed writer ", file)
+			r.getOutput(file)
+		}(f)
+		newFiles++
+	}
+
+	log.Debug("New files to analyze ", newFiles, " of ", r.Control.Len())
+}
+
 func (r *Requests) getDataByFiles() {
 	var in, out sync.WaitGroup
 	indone := make(chan struct{}, 1)
 	outdone := make(chan struct{}, 1)
+	stopcheck := make(chan struct{}, 1)
 
-	i_chan := 0
-	for _, f := range r.Config.files {
-		r.addReader()
-		in.Add(1)
-		go func(file string, num int) {
-			defer in.Done()
-			r.getDataByFile(file, r.Readers[num])
-		}(f, i_chan)
-
-		out.Add(1)
-		go func() {
-			defer out.Done()
-			r.getOutput()
-		}()
-		i_chan++
-	}
+	r.getReadersByFiles(&in, &out)
 
 	go func() {
 		in.Wait()
-		close(r.Input)
-		close(r.Output)
+		if r.Config.daemon {
+			close(stopcheck)
+		}
 		close(indone)
 	}()
 
@@ -421,6 +486,22 @@ func (r *Requests) getDataByFiles() {
 		close(outdone)
 	}()
 
+	if r.Config.daemon {
+		go func() {
+			defer log.Debug("Closed files scanner")
+			ticker := time.NewTicker(time.Second * time.Duration(60))
+			for {
+				select {
+				case <-ticker.C:
+					log.Info("Refreshing files")
+					r.getReadersByFiles(&in, &out)
+				case <-stopcheck:
+					return
+				}
+			}
+		}()
+	}
+
 	for {
 		select {
 		case <-indone:
@@ -428,12 +509,12 @@ func (r *Requests) getDataByFiles() {
 			return
 		case <-outdone:
 			log.Error("Aborting...")
-			go r.closeReaders()
+			go r.Control.SendAll()
 			return
 		case <-r.Exit:
-			//close(r.Exit)
-			log.Info("Exit signal detected....Closing...")
-			go r.closeReaders()
+			log.Info("Exit signal detected...Closing...")
+			go r.Control.SendAll()
+			log.Info("Waiting for close writers...")
 			select {
 			case <-outdone:
 				return
@@ -442,64 +523,49 @@ func (r *Requests) getDataByFiles() {
 	}
 }
 
-func (r *Requests) getDataByLines(lines []string) {
+func (r *Requests) getDataByLines(lines []string, data chan *Request) {
 	for _, line := range lines {
-		r.getData(string(line))
+		r.getData(string(line), data)
 	}
 }
 
-func (r *Requests) getData(line string) {
+func (r *Requests) getData(line string, data chan *Request) {
 	req := &Request{}
 	err := req.getData(line, r.Config.geoipdb)
 	if err != nil {
-		log.Debug("Error getting data, ", err)
+		//log.Debug("Error getting data, ", err)
+		return
+	}
+
+	data <- req
+}
+
+func (r *Requests) getOutput(f string) {
+	_, data, ok := r.Control.Get(f)
+	if !ok {
+		log.Error("Getting writer channel ", f)
+		return
+	}
+
+	if r.Config.preview {
+		r.print(data)
 	} else {
-		if r.Config.format == "json" {
-			r.Input <- req
-		} else {
-			r.Output <- req.getPoint()
-		}
+		r.sendToInflux(data)
 	}
 }
 
-func (r *Requests) print() {
-	if r.Config.format == "json" {
-		r.printJson()
-	} else {
-		r.printInflux()
-	}
-}
-
-func (r *Requests) getOutput() {
-	if r.Config.format == "json" {
-		r.printJson()
-	} else {
-		r.sendToInflux()
-		//r.printInflux()
-	}
-}
-
-func (r *Requests) printJson() {
+func (r *Requests) print(data chan *Request) {
 	for {
 		select {
-		case req := <-r.Input:
-			if req != nil {
-				req.printJson()
-			} else {
+		case req, ok := <-data:
+			if !ok {
 				return
 			}
-		}
-	}
-}
-
-func (r *Requests) printInflux() {
-	for {
-		select {
-		case p := <-r.Output:
-			if p != nil {
-				fmt.Println(p.String())
-			} else {
-				return
+			switch r.Config.format {
+			case formatJson:
+				req.printJson()
+			case formatInflux:
+				req.printInflux()
 			}
 		}
 	}

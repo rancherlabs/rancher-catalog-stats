@@ -13,6 +13,7 @@ docker build -t rawmind/rancher-catalog-stats:<version> .
 
 ## Versions
 
+- `0.3-1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.3-1/Dockerfile)
 - `0.2-13` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-13/Dockerfile)
 - `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
 
@@ -30,7 +31,7 @@ Usage of rancher-catalog-stats:
   -filepath string
       Log files to analyze, wildcard allowed between quotes. (default "/var/log/nginx/access.log")
   -format string
-      Output format. influx | json (default "influx")
+      Output format, influx | json (default "influx")
   -geoipdb string
       Geoip db file. (default "GeoLite2-City.mmdb")
   -influxdb string
@@ -45,6 +46,8 @@ Usage of rancher-catalog-stats:
       Limit batch size (default 2000)
   -poll
       Use poll instead of inotify. daemon mode
+  - preview
+      Print metrics to stdout
   -refresh int
       Send metrics every refresh seconds. daemon mode (default 120)
 ```
@@ -56,7 +59,7 @@ NOTE: You need influx already installed and running. The influx db would be crea
 Metrics are on the form.....
 
 ```
-requests,city=Toronto,country=Canada,host=git.rancher.io,ip=xx.xx.xx.xx,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200,uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" ip="xx.xx.xx.xx",uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" 1491289498000000000
+requests,city=Toronto,country=Canada,country_isocode=CA,host=git.rancher.io,ip=xx.xx.xx.xx,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200,uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" ip="xx.xx.xx.xx",uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" 1491289498000000000
 ```
 
 [alpine-base]: https://github.com/rawmind0/alpine-base
