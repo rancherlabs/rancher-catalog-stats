@@ -3,7 +3,6 @@ module github.com/rawmind0/rancher-catalog-stats/src
 go 1.12
 
 require (
-	github.com/influxdata/influxdb1-client/v2 v2.0.0-20190809212627-fc22c7df067e
 	github.com/hpcloud/tail v1.0.1-0.20180514194441-a1dbeea552b7
 	github.com/influxdata/influxdb1-client v0.0.0-20190809212627-fc22c7df067e
 	github.com/oschwald/maxminddb-golang v1.3.1

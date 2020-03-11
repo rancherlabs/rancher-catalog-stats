@@ -13,7 +13,7 @@ docker build -t rawmind/rancher-catalog-stats:<version> .
 
 ## Versions
 
-- `0.3-2` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.3-2/Dockerfile)
+- `0.3-3` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.3-3/Dockerfile)
 - `0.2-13` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-13/Dockerfile)
 - `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
 
@@ -28,6 +28,8 @@ If you run in daemon mode it will tail files and send metrics every refresh seco
 Usage of rancher-catalog-stats:
   -daemon
       Run in daemon mode. Tail files and send metrics continuously by limit or by refresh
+  -fileold string
+      Log files with modification time older than that, will be discarded (default "1h")
   -filepath string
       Log files to analyze, wildcard allowed between quotes. (default "/var/log/nginx/access.log")
   -format string

@@ -4,7 +4,7 @@ WORKDIR /go/src/github.com/rawmind0/rancher-catalog-stats/
 ADD src .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ${SERVICE_NAME} .
 
-FROM rawmind/alpine-base:3.8-1
+FROM rawmind/alpine-base:3.10-1
 MAINTAINER Raul Sanchez <rawmind@gmail.com>
 
 #Set environment
@@ -19,9 +19,9 @@ ENV PATH=${PATH}:${SERVICE_HOME}
 
 WORKDIR $SERVICE_HOME
 COPY --from=builder /go/src/github.com/rawmind0/rancher-catalog-stats/${SERVICE_NAME} ${SERVICE_HOME}
-RUN  curl -sS http://geolite.maxmind.com/download/geoip/database/GeoLite2-City.tar.gz | gunzip -c - | tar -xf - && \ 
-    mv GeoLite2-City_*/GeoLite2-City.mmdb . && \
-    rm -rf GeoLite2-City_* && \
+COPY --from=builder /go/src/github.com/rawmind0/rancher-catalog-stats/GeoLite2-City.mmdb.gz ${SERVICE_HOME}
+RUN gzip -d GeoLite2-City.mmdb.gz && \
+    rm -rf GeoLite2-City.mmdb.gz && \
     addgroup -g ${SERVICE_GID} ${SERVICE_GROUP} && \
     adduser -g "${SERVICE_NAME} user" -D -h ${SERVICE_HOME} -G ${SERVICE_GROUP} -s /sbin/nologin -u ${SERVICE_UID} ${SERVICE_USER} && \
     chown -R ${SERVICE_USER}:${SERVICE_GROUP} ${SERVICE_HOME}

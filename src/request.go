@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hpcloud/tail"
 	_ "github.com/influxdata/influxdb1-client"
 	influx "github.com/influxdata/influxdb1-client/v2"
-	log "github.com/sirupsen/logrus"
-	"github.com/hpcloud/tail"
 	"github.com/oschwald/maxminddb-golang"
+	log "github.com/sirupsen/logrus"
 )
 
 type reqLocation struct {
@@ -152,7 +152,7 @@ func (r *Request) getData(str string, geoipdb string) error {
 	//                        '"$request" $status $body_bytes_sent "$http_referer" '
 	//                        '"$http_user_agent" $request_time $upstream_response_time "$http_x_install_uuid"';
 	logFormatV2 := "^\\[([^\\]]+)\\] ([^ ]+) ([^ ]+) ([^ ]+), ([^ ]+) \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\" \"([^\"]*)\" ([^ ]+) ([^ ]+) \"([^\"]*)\""
-	
+
 	// Log format V1 direct connection
 	//        log_format main '[$time_local] $http_host $remote_addr $http_x_forwarded_for '
 	//                        '"$request" $status $body_bytes_sent "$http_referer" '
@@ -169,7 +169,7 @@ func (r *Request) getData(str string, geoipdb string) error {
 
 	submatches := logline.FindStringSubmatch(str)
 
-	// If log format is not V2, trying with log format V1 
+	// If log format is not V2, trying with log format V1
 	if len(submatches) == 0 {
 		logline, err = regexp.Compile(logFormatV1)
 		if err != nil {
@@ -181,7 +181,6 @@ func (r *Request) getData(str string, geoipdb string) error {
 			logFormatVersion = "1"
 		}
 	}
-
 
 	if (len(submatches) != 14 && len(submatches) != 13) || submatches[2] == "-" || submatches[2] == "localhost" {
 		//log.Warn(submatches)
@@ -213,7 +212,7 @@ func (r *Request) getData(str string, geoipdb string) error {
 	}
 
 	if logFormatVersion == "1" {
-		r.Status =  submatches[6]
+		r.Status = submatches[6]
 		r.Referer = submatches[8]
 		r.Agent = submatches[9]
 		r.Uid = submatches[12]
@@ -223,7 +222,7 @@ func (r *Request) getData(str string, geoipdb string) error {
 	return nil
 }
 
-type ChannelList struct{ 
+type ChannelList struct {
 	Readers map[string](chan struct{})
 	Writers map[string](chan *Request)
 }
@@ -280,7 +279,7 @@ func (c *ChannelList) Send(k string) {
 }
 
 func (c *ChannelList) SendAll() {
-	for k, _ := range c.Readers {
+	for k := range c.Readers {
 		c.Send(k)
 	}
 }
@@ -384,6 +383,18 @@ func (r *Requests) sendToInflux(data chan *Request) {
 }
 
 func (r *Requests) getDataByFile(f string) {
+	fileInfo, err := os.Stat(f)
+	if err != nil {
+		log.Infof("Error accessing file %s, skipping...", f)
+		return
+	}
+	fileModTime := fileInfo.ModTime()
+	oldLimit, _ := time.ParseDuration(r.Config.filesOld)
+	if time.Since(fileModTime) > oldLimit {
+		log.Infof("File %s is older than %s, skipping...", f, oldLimit)
+		return
+	}
+
 	t_mode := tail.Config{Follow: r.Config.daemon, ReOpen: r.Config.daemon, Poll: r.Config.poll}
 
 	log.Info("Analyzing ", f)
@@ -410,11 +421,18 @@ func (r *Requests) getDataByFile(f string) {
 			if os.IsNotExist(err) {
 				log.Infof("File %s not exist, closing...", f)
 				t.Kill(nil)
-        		return
-    		}
+				return
+			}
 			filePos, _ := t.Tell()
 			if fileSize := fileInfo.Size(); fileSize > 0 {
-				log.Infof("File %s processed %d%%", f, filePos*100/fileSize)
+				fileModTime := fileInfo.ModTime()
+				fileProcessed := filePos * 100 / fileSize
+				if fileProcessed >= 100 && time.Since(fileModTime) > oldLimit {
+					log.Infof("File %s processed and older than %s, closing...", f, oldLimit)
+					t.Kill(nil)
+					return
+				}
+				log.Infof("File %s processed %d%%", f, fileProcessed)
 			}
 		case line := <-t.Lines:
 			if line == nil {

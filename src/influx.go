@@ -35,7 +35,7 @@ func (i *Influx) Check(retry int) bool {
 	connected := i.Connect()
 	for index := 0; index < retry && !connected; index, connected = index+1, i.Connect() {
 		if !connected {
-			wait := index + 1 * 5 
+			wait := index + 1*5
 			log.Error("Influx disconnected...")
 			log.Error("Reconnecting ", index+1, " of ", retry, "...")
 			log.Info("Waiting ", wait, " seconds before retry...")
@@ -46,7 +46,7 @@ func (i *Influx) Check(retry int) bool {
 	if !connected {
 		log.Error("Failed to connect to influx ", i.url)
 		return false
-	} 
+	}
 
 	return true
 }
@@ -185,6 +185,6 @@ func (i *Influx) sendToInflux(m []influx.Point, retry int) bool {
 		i.newPoints(m)
 		i.Write()
 		return true
-	} 
+	}
 	return false
 }

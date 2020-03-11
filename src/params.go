@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -27,6 +28,7 @@ type Params struct {
 	format     string
 	limit      int
 	filesPath  string
+	filesOld   string
 	refresh    int
 	daemon     bool
 	debug      bool
@@ -36,13 +38,14 @@ type Params struct {
 
 func (p *Params) init() {
 	flag.BoolVar(&p.debug, "debug", false, "Debug mode")
-	flag.StringVar(&p.format, "format", formatInflux, "Output format. " + formatInflux + " | " + formatJson)
+	flag.StringVar(&p.format, "format", formatInflux, "Output format. "+formatInflux+" | "+formatJson)
 	flag.StringVar(&p.influxurl, "influxurl", "http://localhost:8086", "Influx url connection")
 	flag.StringVar(&p.influxdb, "influxdb", "", "Influx db name")
 	flag.StringVar(&p.influxuser, "influxuser", "", "Influx username")
 	flag.StringVar(&p.influxpass, "influxpass", "", "Influx password")
-	flag.StringVar(&p.filesPath, "filepath", "/var/log/nginx/access.log", "Log files to analyze, wildcard allowed between quotes.")
-	flag.StringVar(&p.geoipdb, "geoipdb", "GeoLite2-City.mmdb", "Geoip db file.")
+	flag.StringVar(&p.filesPath, "filepath", "/var/log/nginx/access.log", "Log files to analyze, wildcard allowed between quotes")
+	flag.StringVar(&p.filesOld, "fileold", "1h", "Log files with modification time older than that, will be discarded")
+	flag.StringVar(&p.geoipdb, "geoipdb", "GeoLite2-City.mmdb", "Geoip db file")
 	flag.BoolVar(&p.daemon, "daemon", false, "Run in daemon mode. Tail files and send metrics continuously by limit or by refresh")
 	flag.BoolVar(&p.poll, "poll", false, "Use poll instead of inotify. daemon mode")
 	flag.BoolVar(&p.preview, "preview", false, "Print metrics to stdout")
@@ -63,6 +66,13 @@ func (p *Params) checkParams() {
 		log.Warn("Setting -preview to true due to json format")
 		p.preview = true
 	}
+
+	if _, err := time.ParseDuration(p.filesOld); err != nil {
+		flag.Usage()
+		log.Errorf("Check fileold params: %v", err)
+		os.Exit(1)
+	}
+
 	if p.format != formatInflux && p.format != formatJson {
 		flag.Usage()
 		log.Error("Check your format params, " + formatInflux + " | " + formatJson)
