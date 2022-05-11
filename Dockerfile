@@ -1,11 +1,18 @@
 FROM golang:1.12.8 AS builder
 ENV SERVICE_NAME=rancher-catalog-stats
-WORKDIR /go/src/github.com/rawmind0/rancher-catalog-stats/
+WORKDIR /go/src/github.com/rancherlabs/rancher-catalog-stats/
 ADD src .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ${SERVICE_NAME} .
 
-FROM rawmind/alpine-base:3.10-1
-MAINTAINER Raul Sanchez <rawmind@gmail.com>
+FROM alpine:3.15.4
+
+RUN apk upgrade --update && \
+    apk add bash \
+            libressl \
+            curl \
+            fping \
+            libcap && \
+    rm -rf /var/cache/apk/*
 
 #Set environment
 ENV SERVICE_NAME=rancher-catalog-stats \
@@ -18,8 +25,8 @@ ENV SERVICE_NAME=rancher-catalog-stats \
 ENV PATH=${PATH}:${SERVICE_HOME}
 
 WORKDIR $SERVICE_HOME
-COPY --from=builder /go/src/github.com/rawmind0/rancher-catalog-stats/${SERVICE_NAME} ${SERVICE_HOME}
-COPY --from=builder /go/src/github.com/rawmind0/rancher-catalog-stats/GeoLite2-City.mmdb.gz ${SERVICE_HOME}
+COPY --from=builder /go/src/github.com/rancherlabs/rancher-catalog-stats/${SERVICE_NAME} ${SERVICE_HOME}
+COPY --from=builder /go/src/github.com/rancherlabs/rancher-catalog-stats/GeoLite2-City.mmdb.gz ${SERVICE_HOME}
 RUN gzip -d GeoLite2-City.mmdb.gz && \
     rm -rf GeoLite2-City.mmdb.gz && \
     addgroup -g ${SERVICE_GID} ${SERVICE_GROUP} && \

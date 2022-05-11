@@ -1,28 +1,16 @@
-[![](https://images.microbadger.com/badges/image/rawmind/rancher-catalog-stats.svg)](https://microbadger.com/images/rawmind/rancher-catalog-stats "Get your own image badge on microbadger.com")
+# rancher-catalog-stats
 
-rancher-catalog-stats
-=====================
+The rancher-catalog-stats service gathers metrics from rancher nginx logs files and sends them to influxdb in order to be explored by grafana. 
 
-This image run rancher-catalog-stats app. It comes from [rawmind/alpine-base][alpine-base].
+Running in daemon mode will tail files and send metrics every refresh seconds. 
 
 ## Build
 
 ```
-docker build -t rawmind/rancher-catalog-stats:<version> .
+docker build -t rancherlabs/rancher-catalog-stats:latest .
 ```
 
-## Versions
-
-- `0.3-3` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.3-3/Dockerfile)
-- `0.2-13` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.2-13/Dockerfile)
-- `0.0.1` [(Dockerfile)](https://github.com/rawmind0/rancher-catalog-stats/blob/0.0.1/Dockerfile)
-
-
 ## Usage
-
-This image run rancher-catalog-stats service. Rancher-catalog-stats get metrics from rancher nginx logs files and send them to a influx in order to be explored by a grafana. 
-
-If you run in daemon mode it will tail files and send metrics every refresh seconds. 
 
 ```
 Usage of rancher-catalog-stats:
@@ -54,17 +42,13 @@ Usage of rancher-catalog-stats:
       Send metrics every refresh seconds. daemon mode (default 120)
 ```
 
-NOTE: You need influx already installed and running. The influx db would be created if doesn't exist.
+NOTE: influxdb should already installed and running. The database will be created if doesn't already exist.
 
 ## Metrics
 
-Metrics are on the form.....
+The format is as follows:
 
 ```
 requests,city=Toronto,country=Canada,country_isocode=CA,host=git.rancher.io,ip=xx.xx.xx.xx,method=GET,path=/rancher-catalog.git/info/refs?service\=git-upload-pack,status=200,uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" ip="xx.xx.xx.xx",uid="XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX" 1491289498000000000
 ```
-
-[alpine-base]: https://github.com/rawmind0/alpine-base
-
-
 
