@@ -200,7 +200,13 @@ func (r *Request) getData(str string, geoipdb string) error {
 
 	r.Ip = cli_ip
 	r.Host = submatches[2]
-	r.parseTimestamp(submatches[1])
+
+	err = r.parseTimestamp(submatches[1])
+
+	if err != nil {
+		log.Error("Could not parse timestamp")
+	}
+
 	r.getLocation(geoipdb)
 
 	if logFormatVersion == "2" {
@@ -208,7 +214,12 @@ func (r *Request) getData(str string, geoipdb string) error {
 		r.Referer = submatches[9]
 		r.Agent = submatches[10]
 		r.Uid = submatches[13]
-		r.parseRequest(submatches[6])
+
+		err := r.parseRequest(submatches[6])
+
+		if err != nil {
+			log.Error("Could not parse request")
+		}
 	}
 
 	if logFormatVersion == "1" {
@@ -216,7 +227,12 @@ func (r *Request) getData(str string, geoipdb string) error {
 		r.Referer = submatches[8]
 		r.Agent = submatches[9]
 		r.Uid = submatches[12]
-		r.parseRequest(submatches[5])
+
+		err := r.parseRequest(submatches[5])
+
+		if err != nil {
+			log.Error("Could not parse request")
+		}
 	}
 
 	return nil
@@ -286,14 +302,6 @@ func (c *ChannelList) SendAll() {
 
 func (c *ChannelList) Len() int {
 	return len(c.Readers)
-}
-
-// Initialize a new request from the input string
-func NewRequest(str string, geoipdb string) (*Request, error) {
-	req := &Request{}
-
-	req.getData(str, geoipdb)
-	return req, nil
 }
 
 type Requests struct {
@@ -436,7 +444,10 @@ func (r *Requests) getDataByFile(f string) {
 			}
 		case line := <-t.Lines:
 			if line == nil {
-				t.Stop()
+				err = t.Stop()
+				if err != nil {
+					log.Error("Could not stop")
+				}
 				return
 			}
 			r.getData(string(line.Text), data)
@@ -540,12 +551,6 @@ func (r *Requests) getDataByFiles() {
 				return
 			}
 		}
-	}
-}
-
-func (r *Requests) getDataByLines(lines []string, data chan *Request) {
-	for _, line := range lines {
-		r.getData(string(line), data)
 	}
 }
 
