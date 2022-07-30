@@ -1,4 +1,4 @@
-module github.com/rancherlabs/rancher-catalog-stats/src
+module github.com/rancherlabs/rancher-catalog-stats
 
 go 1.12
 
